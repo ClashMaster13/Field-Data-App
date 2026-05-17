@@ -1,6 +1,6 @@
 Author: Sudip Kundu
 
-# 🌾 Enterprise Field Data App
+# 🌾 Field Data App
 
 A high-performance, fully offline Progressive Web App (PWA) designed for plant breeders, agronomists, and field technicians. 
 
