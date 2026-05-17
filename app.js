@@ -3,73 +3,108 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(err => console.error(err));
 }
 
-// --- DYNAMIC WORKSPACE MEMORY ENGINE ---
-// Load the list of all workspaces, default to just 'Crop_1' if brand new
+// --- PHASE 2: INDEXED-DB ENGINE ---
+const DB_NAME = "FieldEnterpriseDB";
+const DB_VERSION = 1;
+
+function initDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onerror = e => reject(e);
+        request.onsuccess = e => resolve(e.target.result);
+        request.onupgradeneeded = e => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains('workspaces')) {
+                db.createObjectStore('workspaces', { keyPath: 'ws_name' });
+            }
+            if (!db.objectStoreNames.contains('photos')) {
+                db.createObjectStore('photos', { keyPath: 'id' });
+            }
+        };
+    });
+}
+
+// Global Application State
 let workspaces = JSON.parse(localStorage.getItem('b_workspaces')) || ['Crop_1'];
 let activeWS = localStorage.getItem('active_ws') || workspaces[0];
+if (!workspaces.includes(activeWS)) { activeWS = workspaces[0]; localStorage.setItem('active_ws', activeWS); }
 
-// Safety check: if active workspace was deleted, fall back to the first available one
-if (!workspaces.includes(activeWS)) {
-    activeWS = workspaces[0];
-    localStorage.setItem('active_ws', activeWS);
-}
-
-function loadWS(key, fallback) {
-    let data = localStorage.getItem(`${activeWS}_${key}`);
-    return data ? JSON.parse(data) : fallback;
-}
-function saveWS(key, value) {
-    localStorage.setItem(`${activeWS}_${key}`, JSON.stringify(value));
-}
-
-// Database State (Scoped to Workspace)
-let trialData = loadWS('trialData', []);
-let traits = loadWS('traits', []);
-let scores = loadWS('scores', {});
-let colMap = loadWS('colMap', {});
-let originalFileName = localStorage.getItem(`${activeWS}_fileName`) || 'Field_Data'; 
+// Workspace Data Memory
+let trialData = [];
+let traits = [];
+let scores = {};
+let colMap = {};
+let originalFileName = 'Field_Data';
 let currentPlotIndex = 0;
 let tempParsedData = []; 
 let tempHeaders = [];
 
+// --- ASYNC DATA LOADING & SAVING ---
+async function loadWorkspaceData() {
+    const db = await initDB();
+    return new Promise((resolve) => {
+        const tx = db.transaction('workspaces', 'readonly');
+        const store = tx.objectStore('workspaces');
+        const req = store.get(activeWS);
+        req.onsuccess = e => {
+            if (e.target.result) {
+                const data = e.target.result;
+                trialData = data.trialData || [];
+                traits = data.traits || [];
+                scores = data.scores || {};
+                colMap = data.colMap || {};
+                originalFileName = data.fileName || 'Field_Data';
+            } else {
+                trialData = []; traits = []; scores = {}; colMap = {}; originalFileName = 'Field_Data';
+            }
+            resolve();
+        };
+    });
+}
+
+async function saveWorkspaceData() {
+    const db = await initDB();
+    const tx = db.transaction('workspaces', 'readwrite');
+    tx.objectStore('workspaces').put({
+        ws_name: activeWS,
+        trialData: trialData,
+        traits: traits,
+        scores: scores,
+        colMap: colMap,
+        fileName: originalFileName
+    });
+}
+
 // Initialize App
-window.onload = () => {
+window.onload = async () => {
     populateWorkspaceDropdown();
+    await loadWorkspaceData();
     updateSetupUI();
     if (trialData.length > 0) switchTab('tab-plot');
 };
 
-// --- WORKSPACE MANAGEMENT FUNCTIONS ---
+// --- WORKSPACE MANAGEMENT ---
 function populateWorkspaceDropdown() {
     const sel = document.getElementById('workspaceSelect');
-    // Replaces underscores with spaces so it looks pretty in the menu
     sel.innerHTML = workspaces.map(ws => `<option value="${ws}">📁 ${ws.replace(/_/g, ' ')}</option>`).join('');
     sel.value = activeWS;
 }
 
 function changeWorkspace() {
-    const newWS = document.getElementById('workspaceSelect').value;
-    localStorage.setItem('active_ws', newWS);
+    localStorage.setItem('active_ws', document.getElementById('workspaceSelect').value);
     location.reload(); 
 }
 
 function addWorkspace() {
     let rawName = document.getElementById('newWorkspaceName').value.trim();
     if (!rawName) return alert("Please enter a name for the new crop workspace.");
-    
-    // Replace spaces with underscores for safe computer memory saving
     let safeName = rawName.replace(/\s+/g, '_');
-    
     if (!workspaces.includes(safeName)) {
         workspaces.push(safeName);
         localStorage.setItem('b_workspaces', JSON.stringify(workspaces));
-        
-        // Auto-switch to the brand new workspace
         localStorage.setItem('active_ws', safeName);
         location.reload();
-    } else {
-        alert("A workspace with this name already exists!");
-    }
+    } else { alert("Workspace already exists!"); }
 }
 
 // --- TAB NAVIGATION ---
@@ -84,19 +119,16 @@ function switchTab(tabId) {
     if (tabId === 'tab-trait') populateTraitSelector();
 }
 
-// --- SETUP & PARSING ---
+// --- PARSING & SETUP ---
 function handleFileUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
-
-    localStorage.setItem(`${activeWS}_fileName`, file.name);
     originalFileName = file.name;
 
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
-            const text = e.target.result;
-            const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+            const lines = e.target.result.split(/\r?\n/).filter(line => line.trim() !== '');
             if (lines.length < 2) throw new Error("File empty or missing headers.");
 
             const parseLine = (str) => {
@@ -117,9 +149,7 @@ function handleFileUpload(event) {
             for (let i = 1; i < lines.length; i++) {
                 const values = parseLine(lines[i]);
                 let rowObj = {};
-                tempHeaders.forEach((header, index) => {
-                    rowObj[header] = values[index] ? values[index] : '';
-                });
+                tempHeaders.forEach((header, index) => { rowObj[header] = values[index] || ''; });
                 if (Object.values(rowObj).some(v => v !== '')) tempParsedData.push(rowObj);
             }
 
@@ -147,9 +177,7 @@ function handleFileUpload(event) {
 function autoSelect(elementId, guesses) {
     const sel = document.getElementById(elementId);
     for (let opt of sel.options) {
-        if (guesses.some(g => opt.value.toLowerCase().includes(g))) {
-            sel.value = opt.value; break;
-        }
+        if (guesses.some(g => opt.value.toLowerCase().includes(g))) { sel.value = opt.value; break; }
     }
 }
 
@@ -165,12 +193,11 @@ function confirmMapping() {
         loc: document.getElementById('mapLoc').value
     };
 
-    saveWS('colMap', colMap);
     trialData = tempParsedData;
-    saveWS('trialData', trialData);
+    saveWorkspaceData(); // Async save
     
     document.getElementById('mappingSection').style.display = 'none';
-    document.getElementById('uploadStatus').innerHTML = `✅ Mapped and loaded <b>${trialData.length}</b> plots.`;
+    document.getElementById('uploadStatus').innerHTML = `✅ Loaded <b>${trialData.length}</b> plots.`;
     currentPlotIndex = 0;
     renderPlotView();
 }
@@ -179,7 +206,7 @@ function addTrait() {
     const traitName = document.getElementById('newTraitName').value.trim();
     if (traitName && !traits.includes(traitName)) {
         traits.push(traitName);
-        saveWS('traits', traits);
+        saveWorkspaceData(); // Async save
         document.getElementById('newTraitName').value = '';
         updateSetupUI();
     }
@@ -192,26 +219,46 @@ function updateSetupUI() {
             <div style="background:#d4edda; color:#155724; padding:12px; border-radius:5px; margin-top:10px; border: 1px solid #c3e6cb;">
                 <strong>✅ Active in ${prettyWSName}:</strong> ${originalFileName} <br>
                 ${trialData.length} plots loaded. <b>Ready to score.</b>
-            </div>
-        `;
+            </div>`;
     } else {
         document.getElementById('uploadStatus').innerHTML = `No trial loaded in ${prettyWSName}.`;
     }
-    const list = document.getElementById('traitList');
-    list.innerHTML = traits.map(t => `<li style="padding: 5px 0; border-bottom: 1px solid #eee;">${t}</li>`).join('');
+    document.getElementById('traitList').innerHTML = traits.map(t => `<li style="padding: 5px 0; border-bottom: 1px solid #eee;">${t}</li>`).join('');
 }
 
 function saveScore(plotId, trait, value) {
     if (!scores[plotId]) scores[plotId] = {};
     scores[plotId][trait] = value;
-    saveWS('scores', scores);
+    saveWorkspaceData(); // Fire and forget to IndexedDB
+}
+
+// --- MEDIA CAPTURE ---
+async function savePhoto(event, plotId) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        const base64Image = e.target.result;
+        document.getElementById('photoPreview').innerHTML = `<img src="${base64Image}" style="width: 100px; border-radius: 5px; border: 2px solid #28a745;">`;
+        
+        const db = await initDB();
+        const tx = db.transaction('photos', 'readwrite');
+        tx.objectStore('photos').put({
+            id: `${activeWS}_${plotId}`,
+            image_data: base64Image,
+            timestamp: new Date().toISOString()
+        });
+    };
+    reader.readAsDataURL(file);
 }
 
 // --- VIEW 1: BY PLOT ---
-function renderPlotView() {
+async function renderPlotView() {
     if (trialData.length === 0 || !colMap.plot) return;
     const currentPlot = trialData[currentPlotIndex];
     const plotId = currentPlot[colMap.plot];
+    const safePlotId = String(plotId).replace(/'/g, "\\'");
 
     let metaHtml = `<h3 style="margin-bottom:5px; color:#007bff;">Plot: ${plotId}</h3><div style="font-size:14px; color:#444;">`;
     if (colMap.trial && currentPlot[colMap.trial]) metaHtml += `<strong style="color:#6c757d;">Trial:</strong> ${currentPlot[colMap.trial]} <br>`;
@@ -228,13 +275,32 @@ function renderPlotView() {
     let inputsHtml = '';
     traits.forEach(trait => {
         const existingVal = (scores[plotId] && scores[plotId][trait]) ? scores[plotId][trait] : '';
-        const safePlotId = String(plotId).replace(/'/g, "\\'");
         inputsHtml += `
             <label>${trait}</label>
             <input type="number" step="any" value="${existingVal}" oninput="saveScore('${safePlotId}', '${trait}', this.value)" placeholder="Enter ${trait}...">
         `;
     });
-    document.getElementById('plotInputs').innerHTML = inputsHtml || `<p style="color:#dc3545; font-weight:bold;">No traits defined in ${activeWS.replace(/_/g, ' ')}.</p>`;
+    
+    // Add Camera UI
+    let cameraHtml = `
+        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
+            <label>📸 Capture Plot Anomaly</label>
+            <input type="file" accept="image/*" capture="environment" onchange="savePhoto(event, '${safePlotId}')">
+            <div id="photoPreview" style="margin-top:10px;"></div>
+        </div>
+    `;
+
+    document.getElementById('plotInputs').innerHTML = (inputsHtml || `<p style="color:#dc3545; font-weight:bold;">No traits defined.</p>`) + cameraHtml;
+
+    // Fetch existing photo for this plot from IndexedDB
+    const db = await initDB();
+    const tx = db.transaction('photos', 'readonly');
+    const photoReq = tx.objectStore('photos').get(`${activeWS}_${plotId}`);
+    photoReq.onsuccess = (e) => {
+        if (e.target.result) {
+            document.getElementById('photoPreview').innerHTML = `<img src="${e.target.result.image_data}" style="width: 100px; border-radius: 5px; border: 2px solid #28a745;">`;
+        }
+    };
 }
 
 function navigatePlot(direction) {
@@ -258,7 +324,7 @@ function jumpTo() {
 // --- VIEW 2: BY TRAIT ---
 function populateTraitSelector() {
     const sel = document.getElementById('traitSelector');
-    sel.innerHTML = '<option value="">-- Choose Trait to Score --</option>' + traits.map(t => `<option value="${t}">${t}</option>`).join('');
+    sel.innerHTML = '<option value="">-- Choose Trait --</option>' + traits.map(t => `<option value="${t}">${t}</option>`).join('');
     document.getElementById('traitListView').innerHTML = '';
 }
 
@@ -276,7 +342,7 @@ function renderTraitView() {
         html += `
             <div class="trait-row" style="background: #fff; padding: 12px; margin-bottom: 8px; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 <div style="font-weight:bold; width:50%; font-size:16px;">Plot ${plotId} <br><span style="font-size:13px; font-weight:normal; color:#666;">${genotype}</span></div>
-                <input type="number" step="any" value="${existingVal}" oninput="saveScore('${safePlotId}', '${activeTrait}', this.value)" placeholder="Value..." style="width: 45%; font-size:16px;">
+                <input type="number" step="any" value="${existingVal}" oninput="saveScore('${safePlotId}', '${activeTrait}', this.value)" style="width: 45%; font-size:16px;">
             </div>
         `;
     });
@@ -319,10 +385,10 @@ function runQC() {
             }
         }
     });
-    if (!foundOutliers) resultsDiv.innerHTML = `<div class="qc-alert" style="background:#d4edda; color:#155724;">✅ All collected data looks normal.</div>`;
+    if (!foundOutliers) resultsDiv.innerHTML = `<div class="qc-alert" style="background:#d4edda; color:#155724;">✅ All data looks normal.</div>`;
 }
 
-// --- EXPORT & CLEAR ---
+// --- EXPORT & SYNC ---
 function exportData() {
     if (trialData.length === 0) return alert("No trial data to export.");
 
@@ -353,30 +419,58 @@ function exportData() {
     URL.revokeObjectURL(url);
 }
 
-// THE NEW TWO-STEP WIPE FUNCTION
-function clearDatabase() {
+async function syncToCloud() {
+    const syncBtn = document.getElementById('syncBtn');
+    syncBtn.innerText = "⏳ Preparing Sync...";
+    
+    try {
+        const payload = { 
+            workspace: activeWS, 
+            data: trialData, 
+            scores: scores,
+            traits: traits
+        };
+        
+        console.log("Payload ready for backend:", payload);
+        
+        // Simulating the time it takes to push to a server (1 second)
+        await new Promise(r => setTimeout(r, 1000));
+        
+        alert("✅ Data package prepared successfully! (Ready to connect to Python or Google Sheets backend)");
+    } catch (err) {
+        alert("❌ Sync failed.");
+    }
+    syncBtn.innerText = "☁️ Sync to Cloud";
+}
+
+// --- DATABASE WIPE (Safely clears IDB) ---
+async function clearDatabase() {
     let prettyWSName = activeWS.replace(/_/g, ' ');
     
-    // Step 1: Confirm they want to wipe the data
-    if (confirm(`WARNING: This will delete ALL trial data and scores for "${prettyWSName}". Did you export first?`)) {
+    if (confirm(`WARNING: This deletes ALL data and photos for "${prettyWSName}". Export first?`)) {
+        const db = await initDB();
+        const tx = db.transaction(['workspaces', 'photos'], 'readwrite');
         
-        localStorage.removeItem(`${activeWS}_trialData`);
-        localStorage.removeItem(`${activeWS}_scores`);
-        localStorage.removeItem(`${activeWS}_colMap`);
-        localStorage.removeItem(`${activeWS}_fileName`);
-        localStorage.removeItem(`${activeWS}_traits`);
+        tx.objectStore('workspaces').delete(activeWS);
         
-        // Step 2: Ask if they want to delete the workspace from the menu entirely
-        if (confirm(`Do you also want to remove "${prettyWSName}" from your workspace list entirely?`)) {
-            workspaces = workspaces.filter(ws => ws !== activeWS);
-            
-            // If they delete the last one, create a default one so the app doesn't break
-            if (workspaces.length === 0) workspaces = ['Crop_1'];
-            
-            localStorage.setItem('b_workspaces', JSON.stringify(workspaces));
-            localStorage.setItem('active_ws', workspaces[0]);
-        }
-        
-        location.reload();
+        const photoStore = tx.objectStore('photos');
+        const cursorReq = photoStore.openCursor();
+        cursorReq.onsuccess = e => {
+            const cursor = e.target.result;
+            if (cursor) {
+                if (cursor.key.startsWith(activeWS + '_')) cursor.delete();
+                cursor.continue();
+            }
+        };
+
+        tx.oncomplete = () => {
+            if (confirm(`Do you also want to remove "${prettyWSName}" from the menu?`)) {
+                workspaces = workspaces.filter(ws => ws !== activeWS);
+                if (workspaces.length === 0) workspaces = ['Crop_1'];
+                localStorage.setItem('b_workspaces', JSON.stringify(workspaces));
+                localStorage.setItem('active_ws', workspaces[0]);
+            }
+            location.reload();
+        };
     }
 }
