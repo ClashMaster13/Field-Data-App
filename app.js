@@ -77,20 +77,22 @@ function handleFileUpload(event) {
             document.getElementById('mappingSection').style.display = 'block';
             document.getElementById('uploadStatus').innerHTML = `⏳ File read. Please map columns below.`;
             
-            const dropdowns = ['mapPlot', 'mapGeno', 'mapRep', 'mapLoc'];
+            // Add mapTrial to the array!
+            const dropdowns = ['mapPlot', 'mapTrial', 'mapGeno', 'mapRep', 'mapLoc'];
             dropdowns.forEach(id => {
                 const sel = document.getElementById(id);
                 sel.innerHTML = id === 'mapPlot' ? '' : '<option value="">-- None / N/A --</option>'; 
                 sel.innerHTML += tempHeaders.map(h => `<option value="${h}">${h}</option>`).join('');
             });
 
+            // Tell the app how to auto-guess the Trial Name column
             autoSelect('mapPlot', ['plot', 'plot_no', 'entry']);
+            autoSelect('mapTrial', ['trial', 'trial_name', 'experiment', 'study']);
             autoSelect('mapGeno', ['genotype', 'line', 'entry_name', 'pedigree']);
             autoSelect('mapRep', ['rep', 'replication', 'block']);
             autoSelect('mapLoc', ['loc', 'location', 'site']);
 
         } catch (error) {
-            // 🛠️ Now it will tell us EXACTLY what broke if it fails again
             alert("Error reading CSV: " + error.message);
             console.error(error);
         }
@@ -114,12 +116,13 @@ function confirmMapping() {
 
     colMap = {
         plot: plotCol,
+        trial: document.getElementById('mapTrial').value, // Save Trial!
         geno: document.getElementById('mapGeno').value,
         rep: document.getElementById('mapRep').value,
         loc: document.getElementById('mapLoc').value
     };
 
-    // Save to memory
+    //Save to memory
     localStorage.setItem('b_colMap', JSON.stringify(colMap));
     trialData = tempParsedData;
     localStorage.setItem('b_trialData', JSON.stringify(trialData));
@@ -159,28 +162,28 @@ function saveScore(plotId, trait, value) {
 function renderPlotView() {
     if (trialData.length === 0 || !colMap.plot) return;
     const currentPlot = trialData[currentPlotIndex];
-    
-    // Use the mapped column
     const plotId = currentPlot[colMap.plot];
 
-    // Build Metadata Card (Highlighting the mapped columns first)
     let metaHtml = `<h3 style="margin-bottom:5px; color:#007bff;">Plot: ${plotId}</h3><div style="font-size:14px; color:#444;">`;
     
+    // Highlight Trial Name if mapped
+    if (colMap.trial && currentPlot[colMap.trial]) {
+        metaHtml += `<strong style="color:#6c757d;">Trial:</strong> ${currentPlot[colMap.trial]} <br>`;
+    }
     // Highlight Genotype if mapped
     if (colMap.geno && currentPlot[colMap.geno]) {
         metaHtml += `<strong style="color:#28a745;">Genotype:</strong> ${currentPlot[colMap.geno]} <br>`;
     }
     
-    // Print all other data
+    // Print all other data (skipping the ones we already highlighted)
     for (const [key, val] of Object.entries(currentPlot)) {
-        if (key !== colMap.plot && key !== colMap.geno && val !== '') {
+        if (key !== colMap.plot && key !== colMap.geno && key !== colMap.trial && val !== '') {
             metaHtml += `<strong style="color:#222;">${key}:</strong> ${val} <br>`;
         }
     }
     metaHtml += `</div>`;
     document.getElementById('plotMetaCard').innerHTML = metaHtml;
-
-    // Build Trait Inputs
+// Build Trait Inputs
     let inputsHtml = '';
     traits.forEach(trait => {
         const existingVal = (scores[plotId] && scores[plotId][trait]) ? scores[plotId][trait] : '';
@@ -191,7 +194,6 @@ function renderPlotView() {
     });
     document.getElementById('plotInputs').innerHTML = inputsHtml || '<p style="color:#dc3545; font-weight:bold;">No traits defined. Please go back to Setup and add traits.</p>';
 }
-
 function navigatePlot(direction) {
     currentPlotIndex += direction;
     if (currentPlotIndex < 0) currentPlotIndex = 0;
