@@ -544,7 +544,7 @@ async function syncToCloud() {
         syncBtn.innerText = "🚀 Pushing to Cloud...";
         
         // 3. Fire it at your Google App Script
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbzwrFZJDE_qCEEHiZTRDdOgAuTb3QfTUsc7Okwu_MT2oQGRUPTl5uFYwaEi21Gdq36utA/exec"; 
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbwkJZx5sNojar_Z10glpIp3aSX_C2cUUKm6MUtuHnEPzKY4hwcI09nQGVAI-2r6zj_e/exec"; 
         
         // Use text/plain to bypass Google's strict CORS security blocks
         const response = await fetch(GAS_URL, {
