@@ -80,3 +80,9 @@ To enable the `☁️ Sync to Cloud` button, you must deploy the Google Apps Scr
 6. **Sync:** Once connected to Wi-Fi, click **Sync to Cloud** to push all data and photos to your Google Sheet.
 
 Author: Sudip Kundu
+#### Copyright (c) 2026 [Sudip Kundu]. All rights reserved.
+
+
+
+
+
