@@ -1,5 +1,5 @@
 // CHANGE THIS NUMBER EVERY TIME YOU UPDATE THE APP CODE
-const CACHE_NAME = 'field-app-v1.3'; 
+const CACHE_NAME = 'field-app-v1.5'; 
 
 const ASSETS = [
     './',
