@@ -1,3 +1,6 @@
+// GLOBAL ERROR CATCHER (Helps debug silent crashes on mobile)
+window.onerror = function(msg, url, line) { alert("ERROR: " + msg + "\nLine: " + line); };
+
 // Register Service Worker
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(err => console.error(err));
@@ -419,31 +422,7 @@ function exportData() {
     URL.revokeObjectURL(url);
 }
 
-async function syncToCloud() {
-    const syncBtn = document.getElementById('syncBtn');
-    syncBtn.innerText = "⏳ Preparing Sync...";
-    
-    try {
-        const payload = { 
-            workspace: activeWS, 
-            data: trialData, 
-            scores: scores,
-            traits: traits
-        };
-        
-        console.log("Payload ready for backend:", payload);
-        
-        // Simulating the time it takes to push to a server (1 second)
-        await new Promise(r => setTimeout(r, 1000));
-        
-        alert("✅ Data package prepared successfully! (Ready to connect to Python or Google Sheets backend)");
-    } catch (err) {
-        alert("❌ Sync failed.");
-    }
-    syncBtn.innerText = "☁️ Sync to Cloud";
-}
-
-// --- DATABASE WIPE (Safely clears IDB) ---
+// --- YOUR GOOGLE APPS SCRIPT INTEGRATION ---
 async function syncToCloud() {
     const syncBtn = document.getElementById('syncBtn');
     syncBtn.innerText = "⏳ Gathering Data & Photos...";
@@ -477,14 +456,13 @@ async function syncToCloud() {
             data: trialData, 
             scores: scores,
             traits: traits,
-            photos: photosToSync // <--- The massive photo data is now attached!
+            photos: photosToSync 
         };
         
         syncBtn.innerText = "🚀 Pushing to Cloud...";
         
         // 3. Fire it at your Google App Script
-        // PASTE YOUR GOOGLE WEB APP URL HERE
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbxCwhnxIZLJ2qBNtAyqaj5OU5pfiII1120QcUNvqJGbW-UQN2BKKG4tY2S8Jm5HoSaUIA/exec"; 
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbxCwhnxIZLJ2qBNtAyqaj5OU5pfiII1120QcUNvqJGbW-UQN2BKKG4tY2S8Jm5HoSaUIA/exec";
         
         const response = await fetch(GAS_URL, {
             method: 'POST',
@@ -503,6 +481,36 @@ async function syncToCloud() {
     }
     
     syncBtn.innerText = "☁️ Sync to Cloud";
-};
+}
+
+// --- DATABASE WIPE (Safely clears IDB) ---
+async function clearDatabase() {
+    let prettyWSName = activeWS.replace(/_/g, ' ');
+    
+    if (confirm(`WARNING: This deletes ALL data and photos for "${prettyWSName}". Export first?`)) {
+        const db = await initDB();
+        const tx = db.transaction(['workspaces', 'photos'], 'readwrite');
+        
+        tx.objectStore('workspaces').delete(activeWS);
+        
+        const photoStore = tx.objectStore('photos');
+        const cursorReq = photoStore.openCursor();
+        cursorReq.onsuccess = e => {
+            const cursor = e.target.result;
+            if (cursor) {
+                if (cursor.key.startsWith(activeWS + '_')) cursor.delete();
+                cursor.continue();
+            }
+        };
+
+        tx.oncomplete = () => {
+            if (confirm(`Do you also want to remove "${prettyWSName}" from the menu?`)) {
+                workspaces = workspaces.filter(ws => ws !== activeWS);
+                if (workspaces.length === 0) workspaces = ['Crop_1'];
+                localStorage.setItem('b_workspaces', JSON.stringify(workspaces));
+                localStorage.setItem('active_ws', workspaces[0]);
+            }
+            location.reload();
+        };
     }
 }
