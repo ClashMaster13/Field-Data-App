@@ -537,13 +537,14 @@ async function syncToCloud() {
             data: trialData, 
             scores: scores,
             traits: traits,
-            photos: photosToSync 
+            photos: photosToSync, 
+            plotCol: colMap.plot // <--- ADD THIS LINE! (Tells the script which column is the Plot ID)
         };
         
         syncBtn.innerText = "🚀 Pushing to Cloud...";
         
         // 3. Fire it at your Google App Script
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbxCwhnxIZLJ2qBNtAyqaj5OU5pfiII1120QcUNvqJGbW-UQN2BKKG4tY2S8Jm5HoSaUIA/exec"; 
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbzwrFZJDE_qCEEHiZTRDdOgAuTb3QfTUsc7Okwu_MT2oQGRUPTl5uFYwaEi21Gdq36utA/exec"; 
         
         // Use text/plain to bypass Google's strict CORS security blocks
         const response = await fetch(GAS_URL, {
