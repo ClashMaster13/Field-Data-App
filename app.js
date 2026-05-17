@@ -42,16 +42,35 @@ function handleFileUpload(event) {
             const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
             if (lines.length < 2) throw new Error("File empty or missing headers.");
 
-            tempHeaders = lines[0].split(',').map(h => h.trim());
+            // 🛠️ THE UPGRADE: Bulletproof CSV Parser
+            // This safely ignores commas that are trapped inside "quotation marks"
+            const parseLine = (str) => {
+                let result = [], cell = '', inQuotes = false;
+                for (let i = 0; i < str.length; i++) {
+                    let char = str[i];
+                    if (char === '"') inQuotes = !inQuotes;
+                    else if (char === ',' && !inQuotes) { result.push(cell.trim()); cell = ''; }
+                    else cell += char;
+                }
+                result.push(cell.trim());
+                // Strip the quotation marks off the final text
+                return result.map(c => c.replace(/^"|"$/g, '').trim());
+            };
+
+            tempHeaders = parseLine(lines[0]);
             tempParsedData = [];
             
             for (let i = 1; i < lines.length; i++) {
-                const values = lines[i].split(',');
+                const values = parseLine(lines[i]);
                 let rowObj = {};
                 tempHeaders.forEach((header, index) => {
-                    rowObj[header] = values[index] ? values[index].trim() : '';
+                    rowObj[header] = values[index] ? values[index] : '';
                 });
-                if (Object.values(rowObj).some(v => v !== '')) tempParsedData.push(rowObj);
+                
+                // Only push if the row isn't completely empty
+                if (Object.values(rowObj).some(v => v !== '')) {
+                    tempParsedData.push(rowObj);
+                }
             }
 
             // Show Mapping UI and populate dropdowns
@@ -61,24 +80,23 @@ function handleFileUpload(event) {
             const dropdowns = ['mapPlot', 'mapGeno', 'mapRep', 'mapLoc'];
             dropdowns.forEach(id => {
                 const sel = document.getElementById(id);
-                // Add a blank/optional default for non-required fields
                 sel.innerHTML = id === 'mapPlot' ? '' : '<option value="">-- None / N/A --</option>'; 
                 sel.innerHTML += tempHeaders.map(h => `<option value="${h}">${h}</option>`).join('');
             });
 
-            // Auto-guess common names to save the user time
             autoSelect('mapPlot', ['plot', 'plot_no', 'entry']);
             autoSelect('mapGeno', ['genotype', 'line', 'entry_name', 'pedigree']);
             autoSelect('mapRep', ['rep', 'replication', 'block']);
             autoSelect('mapLoc', ['loc', 'location', 'site']);
 
         } catch (error) {
-            alert("Error reading CSV. Ensure it is saved as a 'CSV (Comma delimited)' file.");
+            // 🛠️ Now it will tell us EXACTLY what broke if it fails again
+            alert("Error reading CSV: " + error.message);
+            console.error(error);
         }
     };
     reader.readAsText(file);
 }
-
 // Helper to auto-guess dropdown values
 function autoSelect(elementId, guesses) {
     const sel = document.getElementById(elementId);
