@@ -444,33 +444,65 @@ async function syncToCloud() {
 }
 
 // --- DATABASE WIPE (Safely clears IDB) ---
-async function clearDatabase() {
-    let prettyWSName = activeWS.replace(/_/g, ' ');
+async function syncToCloud() {
+    const syncBtn = document.getElementById('syncBtn');
+    syncBtn.innerText = "⏳ Gathering Data & Photos...";
     
-    if (confirm(`WARNING: This deletes ALL data and photos for "${prettyWSName}". Export first?`)) {
+    try {
+        // 1. Gather all photos from the database for this specific crop
         const db = await initDB();
-        const tx = db.transaction(['workspaces', 'photos'], 'readwrite');
+        const photosToSync = {};
         
-        tx.objectStore('workspaces').delete(activeWS);
-        
-        const photoStore = tx.objectStore('photos');
-        const cursorReq = photoStore.openCursor();
-        cursorReq.onsuccess = e => {
-            const cursor = e.target.result;
-            if (cursor) {
-                if (cursor.key.startsWith(activeWS + '_')) cursor.delete();
-                cursor.continue();
-            }
-        };
+        await new Promise((resolve) => {
+            const tx = db.transaction('photos', 'readonly');
+            const store = tx.objectStore('photos');
+            const cursorReq = store.openCursor();
+            
+            cursorReq.onsuccess = e => {
+                const cursor = e.target.result;
+                if (cursor) {
+                    if (cursor.key.startsWith(activeWS + '_')) {
+                        photosToSync[cursor.key] = cursor.value.image_data;
+                    }
+                    cursor.continue();
+                } else {
+                    resolve();
+                }
+            };
+        });
 
-        tx.oncomplete = () => {
-            if (confirm(`Do you also want to remove "${prettyWSName}" from the menu?`)) {
-                workspaces = workspaces.filter(ws => ws !== activeWS);
-                if (workspaces.length === 0) workspaces = ['Crop_1'];
-                localStorage.setItem('b_workspaces', JSON.stringify(workspaces));
-                localStorage.setItem('active_ws', workspaces[0]);
-            }
-            location.reload();
+        // 2. Package the payload
+        const payload = { 
+            workspace: activeWS, 
+            data: trialData, 
+            scores: scores,
+            traits: traits,
+            photos: photosToSync // <--- The massive photo data is now attached!
         };
+        
+        syncBtn.innerText = "🚀 Pushing to Cloud...";
+        
+        // 3. Fire it at your Google App Script
+        // PASTE YOUR GOOGLE WEB APP URL HERE
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbyWrQ0Dqtl7ctVy_5bGo58apd30y0LMRRXjc5OV2NxSHTsjxXmS5eLioQST2L4Pxcbgtg/exec"; 
+        
+        const response = await fetch(GAS_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            alert("✅ Data and Photos successfully synced to Google Sheets!");
+        } else {
+            throw new Error(result.message);
+        }
+    } catch (err) {
+        alert("❌ Sync failed. Error: " + err.message);
+    }
+    
+    syncBtn.innerText = "☁️ Sync to Cloud";
+};
     }
 }
