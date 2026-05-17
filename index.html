@@ -41,15 +41,15 @@
 
     <div class="tab-bar">
         <button class="tab-btn active" onclick="switchTab('tab-setup')">⚙️ Setup</button>
-        <button class="tab-btn" onclick="switchTab('tab-plot')">📍 By Plot</button>
-        <button class="tab-btn" onclick="switchTab('tab-trait')">📏 By Trait</button>
-        <button class="tab-btn" onclick="switchTab('tab-qc')">🚨 QC & Export</button>
+        <button class="tab-btn" onclick="switchTab('tab-plot')">📍 See by Plot</button>
+        <button class="tab-btn" onclick="switchTab('tab-trait')">📏 See by Trait</button>
+        <button class="tab-btn" onclick="switchTab('tab-qc')">🚨 Find Outlier & Export</button>
     </div>
 
     <div id="tab-setup" class="tab-content active card">
         <div style="background: #e8f4f8; border: 1px solid #b6d4fe; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
             <h3 style="margin-top:0; color: #084298;">📂 Project Workspace</h3>
-            <p style="font-size:12px; color:#555;">Switch between crops. Powered by IndexedDB for high-capacity storage.</p>
+            <p style="font-size:12px; color:#555;">Switch between crops.</p>
             
             <label>Active Workspace:</label>
             <select id="workspaceSelect" onchange="changeWorkspace()" style="font-weight: bold; color: #084298; margin-bottom: 10px;"></select>
