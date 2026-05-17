@@ -1,27 +1,76 @@
-// Register Service Worker for Offline Use
+// Register Service Worker
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(err => console.error(err));
 }
 
-// Database State
-let trialData = JSON.parse(localStorage.getItem('b_trialData')) || [];
-let traits = JSON.parse(localStorage.getItem('b_traits')) || [];
-let scores = JSON.parse(localStorage.getItem('b_scores')) || {}; 
-let colMap = JSON.parse(localStorage.getItem('b_colMap')) || {}; 
-let originalFileName = localStorage.getItem('b_fileName') || 'Field_Data'; // Tracks filename
+// --- DYNAMIC WORKSPACE MEMORY ENGINE ---
+// Load the list of all workspaces, default to just 'Crop_1' if brand new
+let workspaces = JSON.parse(localStorage.getItem('b_workspaces')) || ['Crop_1'];
+let activeWS = localStorage.getItem('active_ws') || workspaces[0];
+
+// Safety check: if active workspace was deleted, fall back to the first available one
+if (!workspaces.includes(activeWS)) {
+    activeWS = workspaces[0];
+    localStorage.setItem('active_ws', activeWS);
+}
+
+function loadWS(key, fallback) {
+    let data = localStorage.getItem(`${activeWS}_${key}`);
+    return data ? JSON.parse(data) : fallback;
+}
+function saveWS(key, value) {
+    localStorage.setItem(`${activeWS}_${key}`, JSON.stringify(value));
+}
+
+// Database State (Scoped to Workspace)
+let trialData = loadWS('trialData', []);
+let traits = loadWS('traits', []);
+let scores = loadWS('scores', {});
+let colMap = loadWS('colMap', {});
+let originalFileName = localStorage.getItem(`${activeWS}_fileName`) || 'Field_Data'; 
 let currentPlotIndex = 0;
 let tempParsedData = []; 
 let tempHeaders = [];
 
 // Initialize App
 window.onload = () => {
+    populateWorkspaceDropdown();
     updateSetupUI();
-    
-    // THE UX FIX: If a trial is already in memory, skip the Setup tab entirely!
-    if (trialData.length > 0) {
-        switchTab('tab-plot'); 
-    }
+    if (trialData.length > 0) switchTab('tab-plot');
 };
+
+// --- WORKSPACE MANAGEMENT FUNCTIONS ---
+function populateWorkspaceDropdown() {
+    const sel = document.getElementById('workspaceSelect');
+    // Replaces underscores with spaces so it looks pretty in the menu
+    sel.innerHTML = workspaces.map(ws => `<option value="${ws}">📁 ${ws.replace(/_/g, ' ')}</option>`).join('');
+    sel.value = activeWS;
+}
+
+function changeWorkspace() {
+    const newWS = document.getElementById('workspaceSelect').value;
+    localStorage.setItem('active_ws', newWS);
+    location.reload(); 
+}
+
+function addWorkspace() {
+    let rawName = document.getElementById('newWorkspaceName').value.trim();
+    if (!rawName) return alert("Please enter a name for the new crop workspace.");
+    
+    // Replace spaces with underscores for safe computer memory saving
+    let safeName = rawName.replace(/\s+/g, '_');
+    
+    if (!workspaces.includes(safeName)) {
+        workspaces.push(safeName);
+        localStorage.setItem('b_workspaces', JSON.stringify(workspaces));
+        
+        // Auto-switch to the brand new workspace
+        localStorage.setItem('active_ws', safeName);
+        location.reload();
+    } else {
+        alert("A workspace with this name already exists!");
+    }
+}
 
 // --- TAB NAVIGATION ---
 function switchTab(tabId) {
@@ -35,13 +84,12 @@ function switchTab(tabId) {
     if (tabId === 'tab-trait') populateTraitSelector();
 }
 
-// --- SETUP, PARSING & MAPPING ---
+// --- SETUP & PARSING ---
 function handleFileUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Save the original filename to memory
-    localStorage.setItem('b_fileName', file.name);
+    localStorage.setItem(`${activeWS}_fileName`, file.name);
     originalFileName = file.name;
 
     const reader = new FileReader();
@@ -72,10 +120,7 @@ function handleFileUpload(event) {
                 tempHeaders.forEach((header, index) => {
                     rowObj[header] = values[index] ? values[index] : '';
                 });
-                
-                if (Object.values(rowObj).some(v => v !== '')) {
-                    tempParsedData.push(rowObj);
-                }
+                if (Object.values(rowObj).some(v => v !== '')) tempParsedData.push(rowObj);
             }
 
             document.getElementById('mappingSection').style.display = 'block';
@@ -94,10 +139,7 @@ function handleFileUpload(event) {
             autoSelect('mapRep', ['rep', 'replication', 'block']);
             autoSelect('mapLoc', ['loc', 'location', 'site']);
 
-        } catch (error) {
-            alert("Error reading CSV: " + error.message);
-            console.error(error);
-        }
+        } catch (error) { alert("Error reading CSV: " + error.message); }
     };
     reader.readAsText(file);
 }
@@ -106,8 +148,7 @@ function autoSelect(elementId, guesses) {
     const sel = document.getElementById(elementId);
     for (let opt of sel.options) {
         if (guesses.some(g => opt.value.toLowerCase().includes(g))) {
-            sel.value = opt.value;
-            break;
+            sel.value = opt.value; break;
         }
     }
 }
@@ -124,12 +165,12 @@ function confirmMapping() {
         loc: document.getElementById('mapLoc').value
     };
 
-    localStorage.setItem('b_colMap', JSON.stringify(colMap));
+    saveWS('colMap', colMap);
     trialData = tempParsedData;
-    localStorage.setItem('b_trialData', JSON.stringify(trialData));
+    saveWS('trialData', trialData);
     
     document.getElementById('mappingSection').style.display = 'none';
-    document.getElementById('uploadStatus').innerHTML = `✅ Mapped and loaded <b>${trialData.length}</b> plots successfully.`;
+    document.getElementById('uploadStatus').innerHTML = `✅ Mapped and loaded <b>${trialData.length}</b> plots.`;
     currentPlotIndex = 0;
     renderPlotView();
 }
@@ -138,36 +179,32 @@ function addTrait() {
     const traitName = document.getElementById('newTraitName').value.trim();
     if (traitName && !traits.includes(traitName)) {
         traits.push(traitName);
-        localStorage.setItem('b_traits', JSON.stringify(traits));
+        saveWS('traits', traits);
         document.getElementById('newTraitName').value = '';
         updateSetupUI();
     }
 }
 
 function updateSetupUI() {
-    // Make it explicitly clear that memory is active
+    let prettyWSName = activeWS.replace(/_/g, ' ');
     if (trialData.length > 0) {
         document.getElementById('uploadStatus').innerHTML = `
             <div style="background:#d4edda; color:#155724; padding:12px; border-radius:5px; margin-top:10px; border: 1px solid #c3e6cb;">
-                <strong>✅ Active Trial Resumed:</strong> ${originalFileName} <br>
-                ${trialData.length} plots are loaded in offline memory. <b>You do not need to upload again.</b>
+                <strong>✅ Active in ${prettyWSName}:</strong> ${originalFileName} <br>
+                ${trialData.length} plots loaded. <b>Ready to score.</b>
             </div>
         `;
     } else {
-        document.getElementById('uploadStatus').innerHTML = 'No trial loaded.';
+        document.getElementById('uploadStatus').innerHTML = `No trial loaded in ${prettyWSName}.`;
     }
-    
-    // Repopulate the traits list
     const list = document.getElementById('traitList');
     list.innerHTML = traits.map(t => `<li style="padding: 5px 0; border-bottom: 1px solid #eee;">${t}</li>`).join('');
 }
 
-
-// --- CORE SAVING MECHANISM (Instant Save) ---
 function saveScore(plotId, trait, value) {
     if (!scores[plotId]) scores[plotId] = {};
     scores[plotId][trait] = value;
-    localStorage.setItem('b_scores', JSON.stringify(scores));
+    saveWS('scores', scores);
 }
 
 // --- VIEW 1: BY PLOT ---
@@ -177,13 +214,8 @@ function renderPlotView() {
     const plotId = currentPlot[colMap.plot];
 
     let metaHtml = `<h3 style="margin-bottom:5px; color:#007bff;">Plot: ${plotId}</h3><div style="font-size:14px; color:#444;">`;
-    
-    if (colMap.trial && currentPlot[colMap.trial]) {
-        metaHtml += `<strong style="color:#6c757d;">Trial:</strong> ${currentPlot[colMap.trial]} <br>`;
-    }
-    if (colMap.geno && currentPlot[colMap.geno]) {
-        metaHtml += `<strong style="color:#28a745;">Genotype:</strong> ${currentPlot[colMap.geno]} <br>`;
-    }
+    if (colMap.trial && currentPlot[colMap.trial]) metaHtml += `<strong style="color:#6c757d;">Trial:</strong> ${currentPlot[colMap.trial]} <br>`;
+    if (colMap.geno && currentPlot[colMap.geno]) metaHtml += `<strong style="color:#28a745;">Genotype:</strong> ${currentPlot[colMap.geno]} <br>`;
     
     for (const [key, val] of Object.entries(currentPlot)) {
         if (key !== colMap.plot && key !== colMap.geno && key !== colMap.trial && val !== '') {
@@ -202,7 +234,7 @@ function renderPlotView() {
             <input type="number" step="any" value="${existingVal}" oninput="saveScore('${safePlotId}', '${trait}', this.value)" placeholder="Enter ${trait}...">
         `;
     });
-    document.getElementById('plotInputs').innerHTML = inputsHtml || '<p style="color:#dc3545; font-weight:bold;">No traits defined. Please go back to Setup and add traits.</p>';
+    document.getElementById('plotInputs').innerHTML = inputsHtml || `<p style="color:#dc3545; font-weight:bold;">No traits defined in ${activeWS.replace(/_/g, ' ')}.</p>`;
 }
 
 function navigatePlot(direction) {
@@ -215,15 +247,12 @@ function navigatePlot(direction) {
 function jumpTo() {
     const term = document.getElementById('searchPlot').value.toLowerCase().trim();
     if (!term) return;
-    
     const index = trialData.findIndex(row => Object.values(row).some(val => String(val).toLowerCase().includes(term)));
     if (index !== -1) {
         currentPlotIndex = index;
         renderPlotView();
         document.getElementById('searchPlot').value = '';
-    } else {
-        alert("Plot or Genotype not found.");
-    }
+    } else alert("Not found.");
 }
 
 // --- VIEW 2: BY TRAIT ---
@@ -254,41 +283,27 @@ function renderTraitView() {
     document.getElementById('traitListView').innerHTML = html;
 }
 
-// --- QC & OUTLIER DETECTION (UPGRADED ENGINE) ---
+// --- QC & OUTLIER DETECTION ---
 function runQC() {
     const resultsDiv = document.getElementById('qcResults');
     resultsDiv.innerHTML = '';
     let foundOutliers = false;
-    
-    // Read the threshold from the new UI dropdown
     const threshold = parseFloat(document.getElementById('qcThreshold').value) || 3.0;
 
     traits.forEach(trait => {
-        let values = [];
-        let plotMapping = [];
-        
-        // Safely extract numbers, ignoring completely empty cells
+        let values = [], plotMapping = [];
         Object.keys(scores).forEach(plotId => {
             const rawVal = scores[plotId][trait];
             if (rawVal !== undefined && rawVal !== null && rawVal !== '') {
                 const val = parseFloat(rawVal);
-                if (!isNaN(val)) {
-                    values.push(val);
-                    plotMapping.push({ plotId, val });
-                }
+                if (!isNaN(val)) { values.push(val); plotMapping.push({ plotId, val }); }
             }
         });
 
         const n = values.length;
-        
-        // We need at least 3 data points to do meaningful statistics
         if (n > 2) {
-            // 1. Calculate Mean
             const mean = values.reduce((a, b) => a + b, 0) / n;
-            
-            // 2. Calculate SAMPLE Standard Deviation (divide by N-1 instead of N)
-            const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (n - 1);
-            const stdDev = Math.sqrt(variance);
+            const stdDev = Math.sqrt(values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (n - 1));
             
             if (stdDev > 0) {
                 plotMapping.forEach(entry => {
@@ -298,71 +313,70 @@ function runQC() {
                         resultsDiv.innerHTML += `
                             <div class="qc-alert qc-danger">
                                 <strong>Plot ${entry.plotId}</strong>: ${trait} is <b>${entry.val}</b> (Z-Score: ${zScore.toFixed(2)}). 
-                                <br><span style="font-size:12px; color:#555;">Trait Mean: ${mean.toFixed(1)} | Threshold: Z > ${threshold}</span>
                             </div>`;
                     }
                 });
             }
         }
     });
-
-    if (!foundOutliers) {
-        resultsDiv.innerHTML = `<div class="qc-alert" style="background:#d4edda; color:#155724; border-color:#c3e6cb;">✅ All collected data looks normal. No statistical outliers found above Z=${threshold}.</div>`;
-    }
+    if (!foundOutliers) resultsDiv.innerHTML = `<div class="qc-alert" style="background:#d4edda; color:#155724;">✅ All collected data looks normal.</div>`;
 }
 
-// --- EXPORT ---
+// --- EXPORT & CLEAR ---
 function exportData() {
     if (trialData.length === 0) return alert("No trial data to export.");
 
     const baseHeaders = Object.keys(trialData[0]);
     const plotIdCol = colMap.plot || baseHeaders[0];
-    
     const allHeaders = [...baseHeaders, ...traits];
     let csvContent = allHeaders.join(',') + "\n";
 
     trialData.forEach(row => {
         let rowArray = baseHeaders.map(h => {
             let val = row[h] ? String(row[h]) : '';
-            if (val.includes(',') || val.includes('"')) {
-                val = `"${val.replace(/"/g, '""')}"`;
-            }
-            return val;
+            return (val.includes(',') || val.includes('"')) ? `"${val.replace(/"/g, '""')}"` : val;
         });
-        
         const plotId = row[plotIdCol];
-        
-        traits.forEach(trait => {
-            rowArray.push((scores[plotId] && scores[plotId][trait]) ? scores[plotId][trait] : '');
-        });
-        
+        traits.forEach(trait => rowArray.push((scores[plotId] && scores[plotId][trait]) ? scores[plotId][trait] : ''));
         csvContent += rowArray.join(',') + "\n";
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    
-    // Generates the clean filename: e.g. "My_Agra_Trial_Scored.csv"
-    let cleanName = originalFileName.replace('.csv', '');
-    link.setAttribute("download", `${cleanName}_Scored.csv`);
-    
+    link.setAttribute("download", `${originalFileName.replace('.csv', '')}_Scored.csv`);
     link.style.display = 'none';
     document.body.appendChild(link);
-    
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 }
 
+// THE NEW TWO-STEP WIPE FUNCTION
 function clearDatabase() {
-    if (confirm("WARNING: This will permanently delete all trial data and scores on this device. Did you export first?")) {
-        localStorage.removeItem('b_trialData');
-        localStorage.removeItem('b_scores');
-        localStorage.removeItem('b_colMap');
-        localStorage.removeItem('b_fileName');
+    let prettyWSName = activeWS.replace(/_/g, ' ');
+    
+    // Step 1: Confirm they want to wipe the data
+    if (confirm(`WARNING: This will delete ALL trial data and scores for "${prettyWSName}". Did you export first?`)) {
+        
+        localStorage.removeItem(`${activeWS}_trialData`);
+        localStorage.removeItem(`${activeWS}_scores`);
+        localStorage.removeItem(`${activeWS}_colMap`);
+        localStorage.removeItem(`${activeWS}_fileName`);
+        localStorage.removeItem(`${activeWS}_traits`);
+        
+        // Step 2: Ask if they want to delete the workspace from the menu entirely
+        if (confirm(`Do you also want to remove "${prettyWSName}" from your workspace list entirely?`)) {
+            workspaces = workspaces.filter(ws => ws !== activeWS);
+            
+            // If they delete the last one, create a default one so the app doesn't break
+            if (workspaces.length === 0) workspaces = ['Crop_1'];
+            
+            localStorage.setItem('b_workspaces', JSON.stringify(workspaces));
+            localStorage.setItem('active_ws', workspaces[0]);
+        }
+        
         location.reload();
     }
 }
