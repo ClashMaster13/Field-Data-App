@@ -239,36 +239,51 @@ function renderTraitView() {
     document.getElementById('traitListView').innerHTML = html;
 }
 
-// --- QC & OUTLIER DETECTION ---
+// --- QC & OUTLIER DETECTION (UPGRADED ENGINE) ---
 function runQC() {
     const resultsDiv = document.getElementById('qcResults');
     resultsDiv.innerHTML = '';
     let foundOutliers = false;
+    
+    // Read the threshold from the new UI dropdown
+    const threshold = parseFloat(document.getElementById('qcThreshold').value) || 3.0;
 
     traits.forEach(trait => {
         let values = [];
         let plotMapping = [];
         
+        // Safely extract numbers, ignoring completely empty cells
         Object.keys(scores).forEach(plotId => {
-            const val = parseFloat(scores[plotId][trait]);
-            if (!isNaN(val)) {
-                values.push(val);
-                plotMapping.push({ plotId, val });
+            const rawVal = scores[plotId][trait];
+            if (rawVal !== undefined && rawVal !== null && rawVal !== '') {
+                const val = parseFloat(rawVal);
+                if (!isNaN(val)) {
+                    values.push(val);
+                    plotMapping.push({ plotId, val });
+                }
             }
         });
 
-        if (values.length > 2) {
-            const mean = values.reduce((a, b) => a + b) / values.length;
-            const stdDev = Math.sqrt(values.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / values.length);
+        const n = values.length;
+        
+        // We need at least 3 data points to do meaningful statistics
+        if (n > 2) {
+            // 1. Calculate Mean
+            const mean = values.reduce((a, b) => a + b, 0) / n;
+            
+            // 2. Calculate SAMPLE Standard Deviation (divide by N-1 instead of N)
+            const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (n - 1);
+            const stdDev = Math.sqrt(variance);
             
             if (stdDev > 0) {
                 plotMapping.forEach(entry => {
                     const zScore = Math.abs((entry.val - mean) / stdDev);
-                    if (zScore > 3) {
+                    if (zScore >= threshold) {
                         foundOutliers = true;
                         resultsDiv.innerHTML += `
                             <div class="qc-alert qc-danger">
-                                <strong>Plot ${entry.plotId}</strong>: ${trait} is <b>${entry.val}</b> (Z-Score: ${zScore.toFixed(2)}). Mean is ${mean.toFixed(1)}.
+                                <strong>Plot ${entry.plotId}</strong>: ${trait} is <b>${entry.val}</b> (Z-Score: ${zScore.toFixed(2)}). 
+                                <br><span style="font-size:12px; color:#555;">Trait Mean: ${mean.toFixed(1)} | Threshold: Z > ${threshold}</span>
                             </div>`;
                     }
                 });
@@ -276,7 +291,9 @@ function runQC() {
         }
     });
 
-    if (!foundOutliers) resultsDiv.innerHTML = '<div class="qc-alert" style="background:#d4edda; color:#155724; border-color:#c3e6cb;">✅ All collected data looks normal. No statistical outliers found.</div>';
+    if (!foundOutliers) {
+        resultsDiv.innerHTML = `<div class="qc-alert" style="background:#d4edda; color:#155724; border-color:#c3e6cb;">✅ All collected data looks normal. No statistical outliers found above Z=${threshold}.</div>`;
+    }
 }
 
 // --- EXPORT ---
