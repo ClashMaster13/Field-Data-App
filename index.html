@@ -3,51 +3,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FieldScorer</title>
-    <link rel="manifest" href="manifest.json">
+    <title>Enterprise Field Data App</title>
+    <link rel="manifest" href="./manifest.json">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; background: #f4f4f9; }
-        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        label { font-weight: bold; display: block; margin-top: 15px; }
-        input { width: 100%; padding: 12px; margin-top: 5px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
-        button { width: 100%; padding: 15px; background: #28a745; color: white; border: none; border-radius: 5px; font-size: 18px; font-weight: bold; margin-top: 20px; cursor: pointer; }
-        .btn-export { background: #007bff; }
-        .btn-danger { background: #dc3545; margin-top: 10px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f4f4f9; margin: 0; padding: 10px; }
+        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 15px; }
+        h2, h3 { margin-top: 0; color: #333; }
+        
+        /* Tabs */
+        .tab-bar { display: flex; overflow-x: auto; background: #333; border-radius: 8px; margin-bottom: 15px; }
+        .tab-btn { flex: 1; padding: 12px; background: none; border: none; color: white; cursor: pointer; font-weight: bold; white-space: nowrap; }
+        .tab-btn.active { background: #28a745; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* Forms & Inputs */
+        label { font-weight: bold; display: block; margin-top: 10px; font-size: 14px; color: #555; }
+        input, select { width: 100%; padding: 10px; margin-top: 5px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: bold; margin-top: 15px; cursor: pointer; }
+        .btn-success { background: #28a745; }
+        .btn-danger { background: #dc3545; }
+        
+        /* Layout Grids */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .plot-header { background: #e9ecef; padding: 10px; border-radius: 5px; margin-bottom: 15px; }
+        
+        /* Trait Table List */
+        .trait-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; }
+        .trait-row input { width: 50%; margin-top: 0; }
+        
+        /* QC Alerts */
+        .qc-alert { background: #fff3cd; color: #856404; padding: 10px; border-left: 4px solid #ffeeba; margin-top: 10px; }
+        .qc-danger { background: #f8d7da; color: #721c24; border-left: 4px solid #f5c6cb; }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <h2>🌱 Offline Field Scorer</h2>
-        
-        <label>Plot Number</label>
-        <input type="number" id="plotInput" placeholder="e.g., 1001">
-
-        <label>Plant Height (cm)</label>
-        <input type="number" id="heightInput" placeholder="e.g., 85">
-
-        <label>Lodging Score (0-9)</label>
-        <input type="number" id="lodgingInput" placeholder="e.g., 2">
-
-        <button onclick="saveData()">💾 Save Plot Data</button>
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('tab-setup')">⚙️ Setup</button>
+        <button class="tab-btn" onclick="switchTab('tab-plot')">📍 By Plot</button>
+        <button class="tab-btn" onclick="switchTab('tab-trait')">📏 By Trait</button>
+        <button class="tab-btn" onclick="switchTab('tab-qc')">🚨 QC & Export</button>
     </div>
 
-    <div class="card">
-        <h3>📊 Data Stored on Device</h3>
-        <p id="recordCount">0 records collected.</p>
-        <button class="btn-export" onclick="exportCSV()">📥 Export to CSV</button>
-        <button class="btn-danger" onclick="clearData()">⚠️ Clear Device Memory</button>
-        <div style="overflow-x:auto;">
-            <table id="dataTable">
-                <thead><tr><th>Plot</th><th>Height</th><th>Lodging</th></tr></thead>
-                <tbody id="tableBody"></tbody>
-            </table>
+    <div id="tab-setup" class="tab-content active card">
+        <h2>1. Upload Trial Map (CSV)</h2>
+        <p style="font-size: 13px; color: #666;">Upload your trial design. Must contain a column named "Plot" or "Entry". Can include Genotype, Rep, Layout, Pedigree, etc.</p>
+        <input type="file" id="csvFile" accept=".csv" onchange="handleFileUpload(event)">
+        <p id="uploadStatus">No trial loaded.</p>
+        <button class="btn-danger" onclick="clearDatabase()">🗑️ Wipe Device Memory</button>
+
+        <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+
+        <h2>2. Define Traits</h2>
+        <div class="grid-2">
+            <input type="text" id="newTraitName" placeholder="e.g., Tillers">
+            <button class="btn-success" onclick="addTrait()" style="margin-top: 5px;">+ Add Trait</button>
+        </div>
+        <ul id="traitList" style="padding-left: 20px; color: #555;"></ul>
+    </div>
+
+    <div id="tab-plot" class="tab-content card">
+        <div class="grid-2">
+            <input type="text" id="searchPlot" placeholder="Search Plot or Genotype...">
+            <button onclick="jumpTo()" style="margin-top: 5px;">🔍 Jump</button>
+        </div>
+        
+        <div class="plot-header" id="plotMetaCard">
+            <p>Please upload a trial map first.</p>
+        </div>
+
+        <div id="plotInputs">
+            </div>
+
+        <div class="grid-2">
+            <button onclick="navigatePlot(-1)">⬅️ Previous Plot</button>
+            <button onclick="navigatePlot(1)">Next Plot ➡️</button>
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <div id="tab-trait" class="tab-content card">
+        <label>Select Trait to Score:</label>
+        <select id="traitSelector" onchange="renderTraitView()"></select>
+
+        <div id="traitListView" style="margin-top: 15px;">
+            </div>
+    </div>
+
+    <div id="tab-qc" class="tab-content card">
+        <h2>Outlier Analysis</h2>
+        <button onclick="runQC()">🔎 Scan for Outliers (Z > 3)</button>
+        <div id="qcResults" style="margin-top: 15px;"></div>
+
+        <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+
+        <h2>Export Data</h2>
+        <p style="font-size: 13px; color: #666;">Merges your original upload with all collected trait data.</p>
+        <button class="btn-success" onclick="exportData()">📥 Download Final CSV</button>
+    </div>
+
+    <script src="./app.js"></script>
 </body>
 </html>
