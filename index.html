@@ -47,41 +47,39 @@
     </div>
 
     <div id="tab-setup" class="tab-content active card">
+        
+        <div style="background: #e8f4f8; border: 1px solid #b6d4fe; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="margin-top:0; color: #084298;">📂 Project Workspace</h3>
+            <p style="font-size:12px; color:#555;">Switch between crops, or create a new one. Each workspace is completely isolated.</p>
+            
+            <label>Active Workspace:</label>
+            <select id="workspaceSelect" onchange="changeWorkspace()" style="font-weight: bold; color: #084298; margin-bottom: 10px;">
+                </select>
+            
+            <div class="grid-2" style="border-top: 1px dashed #b6d4fe; padding-top: 10px; margin-top: 5px;">
+                <input type="text" id="newWorkspaceName" placeholder="e.g., Mustard 2026">
+                <button class="btn-success" onclick="addWorkspace()" style="margin-top: 5px;">+ Create Workspace</button>
+            </div>
+        </div>
+
         <h2>1. Upload Trial Map (CSV)</h2>
-        <p style="font-size: 13px; color: #666;">Upload your trial design. The app will ask you to map your columns after upload.</p>
+        <p style="font-size: 13px; color: #666;">Upload trial design for the active workspace.</p>
         <input type="file" id="csvFile" accept=".csv" onchange="handleFileUpload(event)">
         <p id="uploadStatus">No trial loaded.</p>
         
         <div id="mappingSection" style="display:none; background:#e9ecef; padding:15px; border-radius:5px; margin-top:15px; border: 1px solid #ccc;">
             <h3 style="margin-top:0;">Map Your Columns</h3>
-            <p style="font-size: 12px; color: #555; margin-bottom: 10px;">Select which columns from your file match the required data.</p>
-            
             <div class="grid-2">
-                <div>
-                    <label>Plot Number (Required)</label>
-                    <select id="mapPlot"></select>
-                </div>
-                <div>
-                    <label>Trial Name</label>
-                    <select id="mapTrial"></select>
-                </div>
-                <div>
-                    <label>Genotype / Line</label>
-                    <select id="mapGeno"></select>
-                </div>
-                <div>
-                    <label>Replication</label>
-                    <select id="mapRep"></select>
-                </div>
-                <div>
-                    <label>Location</label>
-                    <select id="mapLoc"></select>
-                </div>
+                <div><label>Plot Number (Required)</label><select id="mapPlot"></select></div>
+                <div><label>Trial Name</label><select id="mapTrial"></select></div>
+                <div><label>Genotype / Line</label><select id="mapGeno"></select></div>
+                <div><label>Replication</label><select id="mapRep"></select></div>
+                <div><label>Location</label><select id="mapLoc"></select></div>
             </div>
             <button class="btn-success" onclick="confirmMapping()">💾 Confirm Mapping & Load Trial</button>
         </div>
 
-        <button class="btn-danger" style="margin-top: 15px;" onclick="clearDatabase()">🗑️ Wipe Device Memory</button>
+        <button class="btn-danger" style="margin-top: 15px;" onclick="clearDatabase()">🗑️ Wipe CURRENT Workspace</button>
 
         <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
 
@@ -142,7 +140,6 @@
         <button class="btn-success" style="background:#007bff;" onclick="exportData()">📥 Download Final CSV</button>
     </div>
 
-    
     <script src="./app.js"></script>
 </body>
 </html>
