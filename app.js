@@ -236,22 +236,44 @@ function saveScore(plotId, trait, value) {
 }
 
 // --- MEDIA CAPTURE ---
+// --- MEDIA CAPTURE & COMPRESSION ENGINE ---
 async function savePhoto(event, plotId) {
     const file = event.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = async function(e) {
-        const base64Image = e.target.result;
-        document.getElementById('photoPreview').innerHTML = `<img src="${base64Image}" style="width: 100px; border-radius: 5px; border: 2px solid #28a745;">`;
-        
-        const db = await initDB();
-        const tx = db.transaction('photos', 'readwrite');
-        tx.objectStore('photos').put({
-            id: `${activeWS}_${plotId}`,
-            image_data: base64Image,
-            timestamp: new Date().toISOString()
-        });
+    reader.onload = function(e) {
+        // Create an invisible image element to load the file
+        const img = new Image();
+        img.onload = async function() {
+            // 1. Create an invisible Canvas
+            const canvas = document.createElement('canvas');
+            
+            // 2. Set max width to 1200px (Plenty big enough for agricultural anomalies)
+            const MAX_WIDTH = 1200;
+            const scaleSize = MAX_WIDTH / img.width;
+            canvas.width = MAX_WIDTH;
+            canvas.height = img.height * scaleSize;
+
+            // 3. Draw the image onto the canvas (resizing it)
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            // 4. Compress to a lightweight JPEG (70% quality)
+            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+
+            // 5. Show preview and save to database
+            document.getElementById('photoPreview').innerHTML = `<img src="${compressedBase64}" style="width: 100px; border-radius: 5px; border: 2px solid #28a745;">`;
+            
+            const db = await initDB();
+            const tx = db.transaction('photos', 'readwrite');
+            tx.objectStore('photos').put({
+                id: `${activeWS}_${plotId}`,
+                image_data: compressedBase64,
+                timestamp: new Date().toISOString()
+            });
+        };
+        img.src = e.target.result; // Triggers the img.onload above
     };
     reader.readAsDataURL(file);
 }
