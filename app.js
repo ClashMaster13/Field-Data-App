@@ -374,7 +374,7 @@ async function renderPlotView() {
     // Add Camera UI
     let cameraHtml = `
         <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
-            <label>📸 Capture Plot Anomaly</label>
+            <label>📸 Capture Plot</label>
             <input type="file" accept="image/*" capture="environment" onchange="savePhoto(event, '${safePlotId}')">
             <div id="photoPreview" style="margin-top:10px;"></div>
         </div>
