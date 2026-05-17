@@ -486,8 +486,15 @@ async function syncToCloud() {
         // 3. Fire it at your Google App Script
         const GAS_URL = "https://script.google.com/macros/s/AKfycbxCwhnxIZLJ2qBNtAyqaj5OU5pfiII1120QcUNvqJGbW-UQN2BKKG4tY2S8Jm5HoSaUIA/exec";
         
+
+        
+        // THE FIX: Explicitly forcing text/plain to bypass Google's CORS preflight block
         const response = await fetch(GAS_URL, {
+            redirect: "follow",
             method: 'POST',
+            headers: {
+                "Content-Type": "text/plain;charset=utf-8",
+            },
             body: JSON.stringify(payload)
         });
         
