@@ -86,7 +86,7 @@ function renderPlotView() {
     const currentPlot = trialData[currentPlotIndex];
     
     // Find the plot identifier (looks for 'Plot' or 'Entry' column)
-    const plotIdCol = Object.keys(currentPlot).find(k => k.toLowerCase() === 'plot' || k.toLowerCase() === 'entry') || Object.keys(currentPlot)[0];
+    const plotIdCol = Object.keys(currentPlot).find(k => k.toLowerCase() === 'plot' || k.toLowerCase() === 'entry') || k.toLowerCase() === 'genotype') || Object.keys(currentPlot)[0];
     const plotId = currentPlot[plotIdCol];
 
     // Build Metadata Card
