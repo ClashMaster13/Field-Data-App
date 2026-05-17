@@ -16,7 +16,11 @@ let tempHeaders = [];
 // Initialize App
 window.onload = () => {
     updateSetupUI();
-    if (trialData.length > 0) renderPlotView();
+    
+    // THE UX FIX: If a trial is already in memory, skip the Setup tab entirely!
+    if (trialData.length > 0) {
+        switchTab('tab-plot'); 
+    }
 };
 
 // --- TAB NAVIGATION ---
@@ -141,12 +145,23 @@ function addTrait() {
 }
 
 function updateSetupUI() {
+    // Make it explicitly clear that memory is active
     if (trialData.length > 0) {
-        document.getElementById('uploadStatus').innerHTML = `✅ Loaded <b>${trialData.length}</b> plots.`;
+        document.getElementById('uploadStatus').innerHTML = `
+            <div style="background:#d4edda; color:#155724; padding:12px; border-radius:5px; margin-top:10px; border: 1px solid #c3e6cb;">
+                <strong>✅ Active Trial Resumed:</strong> ${originalFileName} <br>
+                ${trialData.length} plots are loaded in offline memory. <b>You do not need to upload again.</b>
+            </div>
+        `;
+    } else {
+        document.getElementById('uploadStatus').innerHTML = 'No trial loaded.';
     }
+    
+    // Repopulate the traits list
     const list = document.getElementById('traitList');
     list.innerHTML = traits.map(t => `<li style="padding: 5px 0; border-bottom: 1px solid #eee;">${t}</li>`).join('');
 }
+
 
 // --- CORE SAVING MECHANISM (Instant Save) ---
 function saveScore(plotId, trait, value) {
