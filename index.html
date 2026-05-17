@@ -122,16 +122,27 @@
 
     <div id="tab-qc" class="tab-content card">
         <h2>Outlier Analysis</h2>
-        <button onclick="runQC()">🔎 Scan for Outliers (Z > 3)</button>
+        
+        <div style="margin-bottom: 15px; background: #f8f9fa; padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+            <label style="margin-top:0;">Z-Score Threshold (Stringency):</label>
+            <select id="qcThreshold">
+                <option value="2.0">Medium (Z > 2.0)</option>
+                <option value="2.5">Strict (Z > 2.5)</option>
+                <option value="3.0" selected>Very Strict (Z > 3.0)</option>
+            </select>
+        </div>
+        
+        <button class="btn-success" onclick="runQC()">🔎 Scan for Outliers</button>
         <div id="qcResults" style="margin-top: 15px;"></div>
 
         <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
 
         <h2>Export Data</h2>
         <p style="font-size: 13px; color: #666;">Merges your original upload with all collected trait data.</p>
-        <button class="btn-success" onclick="exportData()">📥 Download Final CSV</button>
+        <button class="btn-success" style="background:#007bff;" onclick="exportData()">📥 Download Final CSV</button>
     </div>
 
+    
     <script src="./app.js"></script>
 </body>
 </html>
