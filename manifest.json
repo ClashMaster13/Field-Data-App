@@ -1,5 +1,5 @@
 {
-    "name": "Enterprise Field Data App",
+    "name": "Field Data App",
     "short_name": "Field Data App",
     "start_url": "index.html",
     "display": "standalone",
