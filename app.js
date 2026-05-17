@@ -484,7 +484,7 @@ async function syncToCloud() {
         
         // 3. Fire it at your Google App Script
         // PASTE YOUR GOOGLE WEB APP URL HERE
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbyWrQ0Dqtl7ctVy_5bGo58apd30y0LMRRXjc5OV2NxSHTsjxXmS5eLioQST2L4Pxcbgtg/exec"; 
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbwHcrLwDWS-YwKt0MYaIRirYVJPk4E9q2rqU_vBkVaWiE-KXM9Lwxz-lCpkZCHZD_D4BQ/exec"; 
         
         const response = await fetch(GAS_URL, {
             method: 'POST',
