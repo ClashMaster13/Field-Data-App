@@ -1,0 +1,15 @@
+{
+    "name": "Enterprise Field Data App",
+    "short_name": "Field Data App",
+    "start_url": "index.html",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#28a745",
+    "icons": [
+        {
+            "src": "https://cdn-icons-png.flaticon.com/512/1892/1892747.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        }
+    ]
+}

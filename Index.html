@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FieldScorer</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; background: #f4f4f9; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        label { font-weight: bold; display: block; margin-top: 15px; }
+        input { width: 100%; padding: 12px; margin-top: 5px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 15px; background: #28a745; color: white; border: none; border-radius: 5px; font-size: 18px; font-weight: bold; margin-top: 20px; cursor: pointer; }
+        .btn-export { background: #007bff; }
+        .btn-danger { background: #dc3545; margin-top: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>🌱 Offline Field Scorer</h2>
+        
+        <label>Plot Number</label>
+        <input type="number" id="plotInput" placeholder="e.g., 1001">
+
+        <label>Plant Height (cm)</label>
+        <input type="number" id="heightInput" placeholder="e.g., 85">
+
+        <label>Lodging Score (0-9)</label>
+        <input type="number" id="lodgingInput" placeholder="e.g., 2">
+
+        <button onclick="saveData()">💾 Save Plot Data</button>
+    </div>
+
+    <div class="card">
+        <h3>📊 Data Stored on Device</h3>
+        <p id="recordCount">0 records collected.</p>
+        <button class="btn-export" onclick="exportCSV()">📥 Export to CSV</button>
+        <button class="btn-danger" onclick="clearData()">⚠️ Clear Device Memory</button>
+        <div style="overflow-x:auto;">
+            <table id="dataTable">
+                <thead><tr><th>Plot</th><th>Height</th><th>Lodging</th></tr></thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
