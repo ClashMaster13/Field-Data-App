@@ -8,6 +8,7 @@ let trialData = JSON.parse(localStorage.getItem('b_trialData')) || [];
 let traits = JSON.parse(localStorage.getItem('b_traits')) || [];
 let scores = JSON.parse(localStorage.getItem('b_scores')) || {}; 
 let colMap = JSON.parse(localStorage.getItem('b_colMap')) || {}; 
+let originalFileName = localStorage.getItem('b_fileName') || 'Field_Data'; // NEW: Tracks filename
 let currentPlotIndex = 0;
 let tempParsedData = []; 
 let tempHeaders = [];
@@ -34,6 +35,10 @@ function switchTab(tabId) {
 function handleFileUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
+
+    // Save the original filename to memory so we can use it later
+    localStorage.setItem('b_fileName', file.name);
+    originalFileName = file.name;
 
     const reader = new FileReader();
     reader.onload = function(e) {
@@ -187,13 +192,15 @@ function renderPlotView() {
     let inputsHtml = '';
     traits.forEach(trait => {
         const existingVal = (scores[plotId] && scores[plotId][trait]) ? scores[plotId][trait] : '';
+        // Fix: Use oninput for instant saving, and safely escape the plotId
+        const safePlotId = String(plotId).replace(/'/g, "\\'");
         inputsHtml += `
             <label>${trait}</label>
-            <input type="number" step="any" value="${existingVal}" onchange="saveScore('${plotId}', '${trait}', this.value)" placeholder="Enter ${trait}...">
+            <input type="number" step="any" value="${existingVal}" oninput="saveScore('${safePlotId}', '${trait}', this.value)" placeholder="Enter ${trait}...">
         `;
     });
     document.getElementById('plotInputs').innerHTML = inputsHtml || '<p style="color:#dc3545; font-weight:bold;">No traits defined. Please go back to Setup and add traits.</p>';
-}
+    
 function navigatePlot(direction) {
     currentPlotIndex += direction;
     if (currentPlotIndex < 0) currentPlotIndex = 0;
@@ -232,11 +239,12 @@ function renderTraitView() {
         // Use the mapped genotype column, otherwise leave blank
         const genotype = colMap.geno ? row[colMap.geno] : ''; 
         const existingVal = (scores[plotId] && scores[plotId][activeTrait]) ? scores[plotId][activeTrait] : '';
+        const safePlotId = String(plotId).replace(/'/g, "\\'");
         
         html += `
             <div class="trait-row" style="background: #fff; padding: 12px; margin-bottom: 8px; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 <div style="font-weight:bold; width:50%; font-size:16px;">Plot ${plotId} <br><span style="font-size:13px; font-weight:normal; color:#666;">${genotype}</span></div>
-                <input type="number" step="any" value="${existingVal}" onchange="saveScore('${plotId}', '${activeTrait}', this.value)" placeholder="Value..." style="width: 45%; font-size:16px;">
+                <input type="number" step="any" value="${existingVal}" oninput="saveScore('${safePlotId}', '${activeTrait}', this.value)" placeholder="Value..." style="width: 45%; font-size:16px;">
             </div>
         `;
     });
@@ -314,13 +322,17 @@ function exportData() {
         csvContent += rowArray.join(',') + "\n";
     });
 
-    // 🛠️ THE FIX: Package as a Blob instead of a URL string
+   // 🛠️ THE FIX: Package as a Blob instead of a URL string
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", "Exported_Field_Data.csv");
+    
+    // Use the original filename, but add "_Scored" so it doesn't overwrite your blank template
+    let exportName = originalFileName.replace('.csv', '') + '_Scored.csv';
+    link.setAttribute("download", exportName);
+    
     link.style.display = 'none';
     document.body.appendChild(link);
     
