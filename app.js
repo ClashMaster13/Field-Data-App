@@ -1,11 +1,10 @@
 // ============================================================================
-// 1. SERVICE WORKER & ERROR TRACKING
+// 1. SYSTEM SETUP & ERROR TRACKING
 // ============================================================================
-
-// If the app crashes, this will pop up an alert telling you exactly which line broke.
+// If the app crashes, this pops up an alert telling you which line broke
 window.onerror = function(msg, url, line) { alert("ERROR: " + msg + "\nLine: " + line); };
 
-// This registers the offline cache so the app works without internet.
+// Registers the offline cache (Service Worker) so the app works without internet
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(err => console.error(err));
 }
@@ -13,10 +12,10 @@ if ('serviceWorker' in navigator) {
 // ============================================================================
 // 2. THE INDEXED-DB DATABASE ENGINE
 // ============================================================================
-const DB_NAME = "FieldEnterpriseDB"; // The name of our massive offline database
+const DB_NAME = "FieldEnterpriseDB"; // High-capacity offline database name
 const DB_VERSION = 1;
 
-// This function opens the database and creates the tables if they don't exist
+// Opens the database and creates the tables if they don't exist
 function initDB() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -24,11 +23,11 @@ function initDB() {
         request.onsuccess = e => resolve(e.target.result);
         request.onupgradeneeded = e => {
             const db = e.target.result;
-            // Table for our crop workspaces (Wheat, Mustard, etc.)
+            // Table for crop workspaces (Wheat, Mustard, etc.)
             if (!db.objectStoreNames.contains('workspaces')) {
                 db.createObjectStore('workspaces', { keyPath: 'ws_name' });
             }
-            // Dedicated table for heavy photo data
+            // Dedicated table for massive photo data
             if (!db.objectStoreNames.contains('photos')) {
                 db.createObjectStore('photos', { keyPath: 'id' });
             }
@@ -39,17 +38,17 @@ function initDB() {
 // ============================================================================
 // 3. GLOBAL MEMORY (STATE)
 // ============================================================================
-// Load the master list of workspaces, or create 'Crop_1' if it's the first time
+// Load master list of workspaces, default to 'Crop_1'
 let workspaces = JSON.parse(localStorage.getItem('b_workspaces')) || ['Crop_1'];
 let activeWS = localStorage.getItem('active_ws') || workspaces[0];
 
-// Fallback: If the active workspace was deleted, default to the first one
+// Fallback: If active workspace was deleted, switch to the first available one
 if (!workspaces.includes(activeWS)) { 
     activeWS = workspaces[0]; 
     localStorage.setItem('active_ws', activeWS); 
 }
 
-// Variables to hold the currently loaded crop's data
+// Variables holding the currently loaded crop's data
 let trialData = [];
 let traits = [];
 let scores = {};
@@ -60,15 +59,15 @@ let tempParsedData = [];
 let tempHeaders = [];
 
 // ============================================================================
-// 4. ASYNC LOADING & SAVING (Read/Write to Hard Drive)
+// 4. HARD DRIVE READ / WRITE FUNCTIONS
 // ============================================================================
-// Pulls the current crop's data out of the database and into active memory
+// Pulls the current crop's data out of IndexedDB and into active memory
 async function loadWorkspaceData() {
     const db = await initDB();
     return new Promise((resolve) => {
         const tx = db.transaction('workspaces', 'readonly');
         const store = tx.objectStore('workspaces');
-        const req = store.get(activeWS); // Get the specific crop's data
+        const req = store.get(activeWS);
         req.onsuccess = e => {
             if (e.target.result) {
                 const data = e.target.result;
@@ -78,7 +77,6 @@ async function loadWorkspaceData() {
                 colMap = data.colMap || {};
                 originalFileName = data.fileName || 'Field_Data';
             } else {
-                // If it's a new workspace, load empty arrays
                 trialData = []; traits = []; scores = {}; colMap = {}; originalFileName = 'Field_Data';
             }
             resolve();
@@ -86,7 +84,7 @@ async function loadWorkspaceData() {
     });
 }
 
-// Saves the current crop's active memory back into the database
+// Saves the current crop's memory back into IndexedDB
 async function saveWorkspaceData() {
     const db = await initDB();
     const tx = db.transaction('workspaces', 'readwrite');
@@ -103,50 +101,46 @@ async function saveWorkspaceData() {
 // ============================================================================
 // 5. STARTUP SCRIPT
 // ============================================================================
-// This runs the exact millisecond the app finishes loading on the screen
+// Runs the exact millisecond the app loads on screen
 window.onload = async () => {
-    populateWorkspaceDropdown();    // Fill the dropdown menu
-    await loadWorkspaceData();      // Fetch the data from the hard drive
-    updateSetupUI();                // Update the text on the screen
-    if (trialData.length > 0) switchTab('tab-plot'); // Skip setup if a trial exists
+    populateWorkspaceDropdown();
+    await loadWorkspaceData();
+    updateSetupUI();
+    if (trialData.length > 0) switchTab('tab-plot');
 };
 
 // ============================================================================
 // 6. WORKSPACE MANAGEMENT
 // ============================================================================
-// Fills the dropdown menu with all available crops
 function populateWorkspaceDropdown() {
     const sel = document.getElementById('workspaceSelect');
     sel.innerHTML = workspaces.map(ws => `<option value="${ws}">📁 ${ws.replace(/_/g, ' ')}</option>`).join('');
     sel.value = activeWS;
 }
 
-// Switches memory banks when you select a different crop
 function changeWorkspace() {
     localStorage.setItem('active_ws', document.getElementById('workspaceSelect').value);
-    location.reload(); // Reload the app to fetch the new memory
+    location.reload(); // Reload to fetch new memory
 }
 
-// Creates a brand new, isolated database bucket for a new crop
 function addWorkspace() {
     let rawName = document.getElementById('newWorkspaceName').value.trim();
     if (!rawName) return alert("Please enter a name for the new crop workspace.");
     
-    let safeName = rawName.replace(/\s+/g, '_'); // Replace spaces with underscores
+    let safeName = rawName.replace(/\s+/g, '_'); 
     if (!workspaces.includes(safeName)) {
         workspaces.push(safeName);
         localStorage.setItem('b_workspaces', JSON.stringify(workspaces));
         localStorage.setItem('active_ws', safeName);
-        location.reload(); // Jump to the new workspace immediately
+        location.reload();
     } else { 
         alert("Workspace already exists!"); 
     }
 }
 
 // ============================================================================
-// 7. UI NAVIGATION
+// 7. UI NAVIGATION & TABS
 // ============================================================================
-// Hides all tabs except the one the user clicked on
 function switchTab(tabId) {
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -155,15 +149,13 @@ function switchTab(tabId) {
     const activeBtn = document.querySelector(`button[onclick*="${tabId}"]`);
     if (activeBtn) activeBtn.classList.add('active');
 
-    // If switching to Plot or Trait tab, refresh their views
     if (tabId === 'tab-plot') renderPlotView();
     if (tabId === 'tab-trait') populateTraitSelector();
 }
 
 // ============================================================================
-// 8. CSV UPLOADING & MAPPING
+// 8. CSV UPLOAD & MAPPING
 // ============================================================================
-// Reads the uploaded file and breaks it down by commas
 function handleFileUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -175,7 +167,7 @@ function handleFileUpload(event) {
             const lines = e.target.result.split(/\r?\n/).filter(line => line.trim() !== '');
             if (lines.length < 2) throw new Error("File empty or missing headers.");
 
-            // Bulletproof parser that ignores commas trapped inside quotes
+            // Bulletproof parser to handle commas inside quotes
             const parseLine = (str) => {
                 let result = [], cell = '', inQuotes = false;
                 for (let i = 0; i < str.length; i++) {
@@ -191,7 +183,6 @@ function handleFileUpload(event) {
             tempHeaders = parseLine(lines[0]);
             tempParsedData = [];
             
-            // Build the JSON database from the CSV rows
             for (let i = 1; i < lines.length; i++) {
                 const values = parseLine(lines[i]);
                 let rowObj = {};
@@ -199,11 +190,9 @@ function handleFileUpload(event) {
                 if (Object.values(rowObj).some(v => v !== '')) tempParsedData.push(rowObj);
             }
 
-            // Show the mapping UI
             document.getElementById('mappingSection').style.display = 'block';
             document.getElementById('uploadStatus').innerHTML = `⏳ File read. Please map columns below.`;
             
-            // Fill the mapping dropdowns with the CSV headers
             const dropdowns = ['mapPlot', 'mapTrial', 'mapGeno', 'mapRep', 'mapLoc'];
             dropdowns.forEach(id => {
                 const sel = document.getElementById(id);
@@ -211,7 +200,6 @@ function handleFileUpload(event) {
                 sel.innerHTML += tempHeaders.map(h => `<option value="${h}">${h}</option>`).join('');
             });
 
-            // Make the app guess which column is which based on keywords
             autoSelect('mapPlot', ['plot', 'plot_no', 'entry']);
             autoSelect('mapTrial', ['trial', 'trial_name', 'experiment']);
             autoSelect('mapGeno', ['genotype', 'line', 'entry_name', 'pedigree']);
@@ -223,7 +211,6 @@ function handleFileUpload(event) {
     reader.readAsText(file);
 }
 
-// Helper function for the auto-guesser above
 function autoSelect(elementId, guesses) {
     const sel = document.getElementById(elementId);
     for (let opt of sel.options) {
@@ -231,7 +218,6 @@ function autoSelect(elementId, guesses) {
     }
 }
 
-// Saves the user's column choices and officially loads the trial into memory
 function confirmMapping() {
     const plotCol = document.getElementById('mapPlot').value;
     if (!plotCol) return alert("You must select a Plot Number column.");
@@ -245,26 +231,24 @@ function confirmMapping() {
     };
 
     trialData = tempParsedData;
-    saveWorkspaceData(); // Async save to database
+    saveWorkspaceData(); 
     
     document.getElementById('mappingSection').style.display = 'none';
     document.getElementById('uploadStatus').innerHTML = `✅ Loaded <b>${trialData.length}</b> plots.`;
     currentPlotIndex = 0;
-    renderPlotView(); // Jump to the plotting screen
+    renderPlotView(); 
 }
 
-// Adds a new trait (like "Yield" or "Height") to the list
 function addTrait() {
     const traitName = document.getElementById('newTraitName').value.trim();
     if (traitName && !traits.includes(traitName)) {
         traits.push(traitName);
-        saveWorkspaceData(); // Async save
+        saveWorkspaceData(); 
         document.getElementById('newTraitName').value = '';
         updateSetupUI();
     }
 }
 
-// Updates the text on the Setup screen to show what is currently loaded
 function updateSetupUI() {
     let prettyWSName = activeWS.replace(/_/g, ' ');
     if (trialData.length > 0) {
@@ -276,21 +260,50 @@ function updateSetupUI() {
     } else {
         document.getElementById('uploadStatus').innerHTML = `No trial loaded in ${prettyWSName}.`;
     }
-    // Render the list of traits
     document.getElementById('traitList').innerHTML = traits.map(t => `<li style="padding: 5px 0; border-bottom: 1px solid #eee;">${t}</li>`).join('');
 }
 
-// Instant-save function. Fires every time a number is typed into a box.
-function saveScore(plotId, trait, value) {
+// ============================================================================
+// 9. THE SUB-SAMPLE ENGINE (Multi-Observation Logic)
+// ============================================================================
+// Forces all data into an Array format so we can hold multiple plants
+function getScoreArray(plotId, trait) {
     if (!scores[plotId]) scores[plotId] = {};
-    scores[plotId][trait] = value;
-    saveWorkspaceData(); // Fire and forget to IndexedDB
+    let val = scores[plotId][trait];
+    if (val === undefined || val === null || val === '') return ['']; // Start with 1 empty box
+    if (!Array.isArray(val)) return [val]; // Converts old single scores to arrays safely
+    return val;
+}
+
+// Updates a specific plant's score (e.g., Plant 2)
+function updateArrayScore(plotId, trait, index, value) {
+    let arr = getScoreArray(plotId, trait);
+    arr[index] = value;
+    scores[plotId][trait] = arr;
+    saveWorkspaceData(); 
+}
+
+// Spawns a new empty input box for a new observation
+function addArrayInput(plotId, trait) {
+    let arr = getScoreArray(plotId, trait);
+    arr.push(''); 
+    scores[plotId][trait] = arr;
+    saveWorkspaceData();
+    renderPlotView(); // Refresh screen
+}
+
+// Deletes a specific observation box
+function removeArrayScore(plotId, trait, index) {
+    let arr = getScoreArray(plotId, trait);
+    arr.splice(index, 1); 
+    scores[plotId][trait] = arr;
+    saveWorkspaceData();
+    renderPlotView(); // Refresh screen
 }
 
 // ============================================================================
-// 9. MEDIA CAPTURE (CAMERA)
+// 10. MEDIA CAPTURE (CAMERA)
 // ============================================================================
-// Converts a photo into a massive text string and saves it to the database
 async function savePhoto(event, plotId) {
     const file = event.target.files[0];
     if (!file) return;
@@ -299,32 +312,29 @@ async function savePhoto(event, plotId) {
     reader.onload = async function(e) {
         const base64Image = e.target.result;
         
-        // Show a tiny preview on the screen immediately
         document.getElementById('photoPreview').innerHTML = `<img src="${base64Image}" style="width: 100px; border-radius: 5px; border: 2px solid #28a745;">`;
         
-        // Open the database and save the image text string
         const db = await initDB();
         const tx = db.transaction('photos', 'readwrite');
         tx.objectStore('photos').put({
-            id: `${activeWS}_${plotId}`, // Links the photo to this specific crop and plot
+            id: `${activeWS}_${plotId}`, 
             image_data: base64Image,
             timestamp: new Date().toISOString()
         });
     };
-    reader.readAsDataURL(file); // Triggers the conversion
+    reader.readAsDataURL(file); 
 }
 
 // ============================================================================
-// 10. VIEW 1: SCORE BY PLOT
+// 11. VIEW 1: SCORE BY PLOT
 // ============================================================================
-// Renders the single-plot interface
 async function renderPlotView() {
     if (trialData.length === 0 || !colMap.plot) return;
     const currentPlot = trialData[currentPlotIndex];
     const plotId = currentPlot[colMap.plot];
-    const safePlotId = String(plotId).replace(/'/g, "\\'"); // Escapes weird characters in plot names
+    const safePlotId = String(plotId).replace(/'/g, "\\'"); 
 
-    // 1. Build the Metadata Header (Genotype, Trial Name, etc.)
+    // Metadata Header
     let metaHtml = `<h3 style="margin-bottom:5px; color:#007bff;">Plot: ${plotId}</h3><div style="font-size:14px; color:#444;">`;
     if (colMap.trial && currentPlot[colMap.trial]) metaHtml += `<strong style="color:#6c757d;">Trial:</strong> ${currentPlot[colMap.trial]} <br>`;
     if (colMap.geno && currentPlot[colMap.geno]) metaHtml += `<strong style="color:#28a745;">Genotype:</strong> ${currentPlot[colMap.geno]} <br>`;
@@ -337,20 +347,34 @@ async function renderPlotView() {
     metaHtml += `</div>`;
     document.getElementById('plotMetaCard').innerHTML = metaHtml;
 
-    // 2. Build the Trait Input Boxes
+    // Build the Trait Input Boxes (With Sub-Sample Logic)
     let inputsHtml = '';
     traits.forEach(trait => {
-        const existingVal = (scores[plotId] && scores[plotId][trait]) ? scores[plotId][trait] : '';
+        let vals = getScoreArray(plotId, trait);
+        
+        // Loop through the array and build an input box for each observation
+        let inputsStr = vals.map((v, idx) => `
+            <div style="display:flex; gap:5px; margin-top:5px;">
+                <input type="number" step="any" value="${v}" 
+                       oninput="updateArrayScore('${safePlotId}', '${trait}', ${idx}, this.value)" 
+                       placeholder="Plant ${idx + 1}...">
+                ${idx > 0 ? `<button onclick="removeArrayScore('${safePlotId}', '${trait}', ${idx})" style="width:40px; background:#dc3545; color:white; border:none; border-radius:5px; margin-top:0; padding:10px;">✖</button>` : ''}
+            </div>
+        `).join('');
+
         inputsHtml += `
-            <label>${trait}</label>
-            <input type="number" step="any" value="${existingVal}" oninput="saveScore('${safePlotId}', '${trait}', this.value)" placeholder="Enter ${trait}...">
+            <div style="background:#f8f9fa; padding:10px; border-radius:5px; margin-top:10px; border:1px solid #ddd;">
+                <label style="margin-top:0;">${trait}</label>
+                <div id="trait_wrapper_${safePlotId}_${trait}">${inputsStr}</div>
+                <button onclick="addArrayInput('${safePlotId}', '${trait}')" style="background:none; border:none; color:#007bff; font-weight:bold; padding:5px 0 0 0; text-align:left; cursor:pointer; width:auto; margin-top:5px; font-size:13px;">+ Add another observation</button>
+            </div>
         `;
     });
     
-    // 3. Add the Camera Button UI
+    // Add Camera UI
     let cameraHtml = `
         <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
-            <label>📸 Capture Plot</label>
+            <label>📸 Capture Plot Anomaly</label>
             <input type="file" accept="image/*" capture="environment" onchange="savePhoto(event, '${safePlotId}')">
             <div id="photoPreview" style="margin-top:10px;"></div>
         </div>
@@ -358,7 +382,7 @@ async function renderPlotView() {
 
     document.getElementById('plotInputs').innerHTML = (inputsHtml || `<p style="color:#dc3545; font-weight:bold;">No traits defined.</p>`) + cameraHtml;
 
-    // 4. Fetch an existing photo for this plot from the database (if they took one earlier)
+    // Fetch existing photo for this plot
     const db = await initDB();
     const tx = db.transaction('photos', 'readonly');
     const photoReq = tx.objectStore('photos').get(`${activeWS}_${plotId}`);
@@ -369,7 +393,6 @@ async function renderPlotView() {
     };
 }
 
-// Moves to the next or previous plot
 function navigatePlot(direction) {
     currentPlotIndex += direction;
     if (currentPlotIndex < 0) currentPlotIndex = 0;
@@ -377,7 +400,6 @@ function navigatePlot(direction) {
     renderPlotView();
 }
 
-// Searches for a specific plot or genotype
 function jumpTo() {
     const term = document.getElementById('searchPlot').value.toLowerCase().trim();
     if (!term) return;
@@ -390,16 +412,14 @@ function jumpTo() {
 }
 
 // ============================================================================
-// 11. VIEW 2: SCORE BY TRAIT
+// 12. VIEW 2: SCORE BY TRAIT
 // ============================================================================
-// Fills the dropdown with traits
 function populateTraitSelector() {
     const sel = document.getElementById('traitSelector');
     sel.innerHTML = '<option value="">-- Choose Trait --</option>' + traits.map(t => `<option value="${t}">${t}</option>`).join('');
     document.getElementById('traitListView').innerHTML = '';
 }
 
-// Renders a long scrolling list of all plots for one specific trait
 function renderTraitView() {
     const activeTrait = document.getElementById('traitSelector').value;
     if (!activeTrait || trialData.length === 0 || !colMap.plot) return;
@@ -408,13 +428,21 @@ function renderTraitView() {
     trialData.forEach(row => {
         const plotId = row[colMap.plot];
         const genotype = colMap.geno ? row[colMap.geno] : ''; 
-        const existingVal = (scores[plotId] && scores[plotId][activeTrait]) ? scores[plotId][activeTrait] : '';
         const safePlotId = String(plotId).replace(/'/g, "\\'");
+        
+        let vals = getScoreArray(plotId, activeTrait);
+        
+        // For trait view, we show all current observations side-by-side
+        let inputsStr = vals.map((v, idx) => `
+            <input type="number" step="any" value="${v}" 
+                   oninput="updateArrayScore('${safePlotId}', '${activeTrait}', ${idx}, this.value)" 
+                   placeholder="P${idx+1}" style="width: 60px; display:inline-block; margin-right:5px; padding:5px;">
+        `).join('');
         
         html += `
             <div class="trait-row" style="background: #fff; padding: 12px; margin-bottom: 8px; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <div style="font-weight:bold; width:50%; font-size:16px;">Plot ${plotId} <br><span style="font-size:13px; font-weight:normal; color:#666;">${genotype}</span></div>
-                <input type="number" step="any" value="${existingVal}" oninput="saveScore('${safePlotId}', '${activeTrait}', this.value)" style="width: 45%; font-size:16px;">
+                <div style="font-weight:bold; width:40%; font-size:16px;">Plot ${plotId} <br><span style="font-size:13px; font-weight:normal; color:#666;">${genotype}</span></div>
+                <div style="width:60%; text-align:right;">${inputsStr}</div>
             </div>
         `;
     });
@@ -422,38 +450,39 @@ function renderTraitView() {
 }
 
 // ============================================================================
-// 12. QUALITY CONTROL & OUTLIERS
+// 13. QUALITY CONTROL & OUTLIERS
 // ============================================================================
-// Calculates Sample Standard Deviation to find typos in the data
 function runQC() {
     const resultsDiv = document.getElementById('qcResults');
     resultsDiv.innerHTML = '';
     let foundOutliers = false;
-    const threshold = parseFloat(document.getElementById('qcThreshold').value) || 3.0; // Reads the strictness setting
+    const threshold = parseFloat(document.getElementById('qcThreshold').value) || 3.0; 
 
     traits.forEach(trait => {
         let values = [], plotMapping = [];
         
-        // Extract all numbers for this trait
+        // Loop through plots and unpack the arrays
         Object.keys(scores).forEach(plotId => {
-            const rawVal = scores[plotId][trait];
-            if (rawVal !== undefined && rawVal !== null && rawVal !== '') {
-                const val = parseFloat(rawVal);
-                if (!isNaN(val)) { values.push(val); plotMapping.push({ plotId, val }); }
-            }
+            let vals = getScoreArray(plotId, trait);
+            vals.forEach(rawVal => {
+                if (rawVal !== undefined && rawVal !== null && rawVal !== '') {
+                    const val = parseFloat(rawVal);
+                    if (!isNaN(val)) { 
+                        values.push(val); 
+                        plotMapping.push({ plotId, val }); 
+                    }
+                }
+            });
         });
 
         const n = values.length;
         if (n > 2) {
-            // Calculate Mean
             const mean = values.reduce((a, b) => a + b, 0) / n;
-            // Calculate Sample Standard Deviation (N-1)
             const stdDev = Math.sqrt(values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (n - 1));
             
             if (stdDev > 0) {
                 plotMapping.forEach(entry => {
                     const zScore = Math.abs((entry.val - mean) / stdDev);
-                    // If the Z-Score is higher than the strictness setting, flag it!
                     if (zScore >= threshold) {
                         foundOutliers = true;
                         resultsDiv.innerHTML += `
@@ -469,9 +498,8 @@ function runQC() {
 }
 
 // ============================================================================
-// 13. EXPORT, SYNC & WIPE
+// 14. EXPORT, SYNC & WIPE
 // ============================================================================
-// Packages the CSV into a Blob memory block and downloads it
 function exportData() {
     if (trialData.length === 0) return alert("No trial data to export.");
 
@@ -486,7 +514,13 @@ function exportData() {
             return (val.includes(',') || val.includes('"')) ? `"${val.replace(/"/g, '""')}"` : val;
         });
         const plotId = row[plotIdCol];
-        traits.forEach(trait => rowArray.push((scores[plotId] && scores[plotId][trait]) ? scores[plotId][trait] : ''));
+        
+        // Flatten the arrays with semicolons for CSV
+        traits.forEach(trait => {
+            let valArr = getScoreArray(plotId, trait).filter(v => v !== '');
+            rowArray.push(valArr.length > 0 ? valArr.join(' ; ') : '');
+        });
+        
         csvContent += rowArray.join(',') + "\n";
     });
 
@@ -502,13 +536,13 @@ function exportData() {
     URL.revokeObjectURL(url);
 }
 
-// The Grand Finale: Pushing local data and photos to Google Sheets
+// Push to Google Sheets
 async function syncToCloud() {
     const syncBtn = document.getElementById('syncBtn');
     syncBtn.innerText = "⏳ Gathering Data & Photos...";
     
     try {
-        // 1. Gather all photos from the database for this specific crop
+        // 1. Gather Photos
         const db = await initDB();
         const photosToSync = {};
         
@@ -520,7 +554,6 @@ async function syncToCloud() {
             cursorReq.onsuccess = e => {
                 const cursor = e.target.result;
                 if (cursor) {
-                    // Only grab photos that belong to the active workspace
                     if (cursor.key.startsWith(activeWS + '_')) {
                         photosToSync[cursor.key] = cursor.value.image_data;
                     }
@@ -531,22 +564,31 @@ async function syncToCloud() {
             };
         });
 
-        // 2. Package the payload with the data, scores, and photos
+        // 2. Flatten the array scores for Google Sheets
+        let flattenedScores = {};
+        Object.keys(scores).forEach(pId => {
+            flattenedScores[pId] = {};
+            traits.forEach(t => {
+                let valArr = getScoreArray(pId, t).filter(v => v !== '');
+                flattenedScores[pId][t] = valArr.length > 0 ? valArr.join(' ; ') : '';
+            });
+        });
+
+        // 3. Package Payload
         const payload = { 
             workspace: activeWS, 
             data: trialData, 
-            scores: scores,
+            scores: flattenedScores, 
             traits: traits,
-            photos: photosToSync, 
-            plotCol: colMap.plot // <--- ADD THIS LINE! (Tells the script which column is the Plot ID)
+            photos: photosToSync,
+            plotCol: colMap.plot 
         };
         
         syncBtn.innerText = "🚀 Pushing to Cloud...";
         
-        // 3. Fire it at your Google App Script
+        // 4. FIRE! (Using your newly provided Google URL)
         const GAS_URL = "https://script.google.com/macros/s/AKfycbwkJZx5sNojar_Z10glpIp3aSX_C2cUUKm6MUtuHnEPzKY4hwcI09nQGVAI-2r6zj_e/exec"; 
         
-        // Use text/plain to bypass Google's strict CORS security blocks
         const response = await fetch(GAS_URL, {
             redirect: "follow",
             method: 'POST',
@@ -570,7 +612,7 @@ async function syncToCloud() {
     syncBtn.innerText = "☁️ Sync to Cloud";
 }
 
-// Safely deletes data from IndexedDB
+// Safely clear IDB
 async function clearDatabase() {
     let prettyWSName = activeWS.replace(/_/g, ' ');
     
@@ -578,10 +620,8 @@ async function clearDatabase() {
         const db = await initDB();
         const tx = db.transaction(['workspaces', 'photos'], 'readwrite');
         
-        // Delete the text data
         tx.objectStore('workspaces').delete(activeWS);
         
-        // Delete ONLY the photos that belong to this workspace
         const photoStore = tx.objectStore('photos');
         const cursorReq = photoStore.openCursor();
         cursorReq.onsuccess = e => {
@@ -592,7 +632,6 @@ async function clearDatabase() {
             }
         };
 
-        // Once the wipe is complete, ask if they want to remove the name from the menu entirely
         tx.oncomplete = () => {
             if (confirm(`Do you also want to remove "${prettyWSName}" from the menu?`)) {
                 workspaces = workspaces.filter(ws => ws !== activeWS);
