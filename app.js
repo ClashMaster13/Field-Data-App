@@ -8,7 +8,7 @@ let trialData = JSON.parse(localStorage.getItem('b_trialData')) || [];
 let traits = JSON.parse(localStorage.getItem('b_traits')) || [];
 let scores = JSON.parse(localStorage.getItem('b_scores')) || {}; 
 let colMap = JSON.parse(localStorage.getItem('b_colMap')) || {}; 
-let originalFileName = localStorage.getItem('b_fileName') || 'Field_Data'; // NEW: Tracks filename
+let originalFileName = localStorage.getItem('b_fileName') || 'Field_Data'; // Tracks filename
 let currentPlotIndex = 0;
 let tempParsedData = []; 
 let tempHeaders = [];
@@ -36,7 +36,7 @@ function handleFileUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Save the original filename to memory so we can use it later
+    // Save the original filename to memory
     localStorage.setItem('b_fileName', file.name);
     originalFileName = file.name;
 
@@ -47,8 +47,6 @@ function handleFileUpload(event) {
             const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
             if (lines.length < 2) throw new Error("File empty or missing headers.");
 
-            // 🛠️ THE UPGRADE: Bulletproof CSV Parser
-            // This safely ignores commas that are trapped inside "quotation marks"
             const parseLine = (str) => {
                 let result = [], cell = '', inQuotes = false;
                 for (let i = 0; i < str.length; i++) {
@@ -58,7 +56,6 @@ function handleFileUpload(event) {
                     else cell += char;
                 }
                 result.push(cell.trim());
-                // Strip the quotation marks off the final text
                 return result.map(c => c.replace(/^"|"$/g, '').trim());
             };
 
@@ -72,17 +69,14 @@ function handleFileUpload(event) {
                     rowObj[header] = values[index] ? values[index] : '';
                 });
                 
-                // Only push if the row isn't completely empty
                 if (Object.values(rowObj).some(v => v !== '')) {
                     tempParsedData.push(rowObj);
                 }
             }
 
-            // Show Mapping UI and populate dropdowns
             document.getElementById('mappingSection').style.display = 'block';
             document.getElementById('uploadStatus').innerHTML = `⏳ File read. Please map columns below.`;
             
-            // Add mapTrial to the array!
             const dropdowns = ['mapPlot', 'mapTrial', 'mapGeno', 'mapRep', 'mapLoc'];
             dropdowns.forEach(id => {
                 const sel = document.getElementById(id);
@@ -90,9 +84,8 @@ function handleFileUpload(event) {
                 sel.innerHTML += tempHeaders.map(h => `<option value="${h}">${h}</option>`).join('');
             });
 
-            // Tell the app how to auto-guess the Trial Name column
             autoSelect('mapPlot', ['plot', 'plot_no', 'entry']);
-            autoSelect('mapTrial', ['trial', 'trial_name', 'experiment', 'study']);
+            autoSelect('mapTrial', ['trial', 'trial_name', 'experiment']);
             autoSelect('mapGeno', ['genotype', 'line', 'entry_name', 'pedigree']);
             autoSelect('mapRep', ['rep', 'replication', 'block']);
             autoSelect('mapLoc', ['loc', 'location', 'site']);
@@ -104,7 +97,7 @@ function handleFileUpload(event) {
     };
     reader.readAsText(file);
 }
-// Helper to auto-guess dropdown values
+
 function autoSelect(elementId, guesses) {
     const sel = document.getElementById(elementId);
     for (let opt of sel.options) {
@@ -121,13 +114,12 @@ function confirmMapping() {
 
     colMap = {
         plot: plotCol,
-        trial: document.getElementById('mapTrial').value, // Save Trial!
+        trial: document.getElementById('mapTrial').value,
         geno: document.getElementById('mapGeno').value,
         rep: document.getElementById('mapRep').value,
         loc: document.getElementById('mapLoc').value
     };
 
-    //Save to memory
     localStorage.setItem('b_colMap', JSON.stringify(colMap));
     trialData = tempParsedData;
     localStorage.setItem('b_trialData', JSON.stringify(trialData));
@@ -156,7 +148,7 @@ function updateSetupUI() {
     list.innerHTML = traits.map(t => `<li style="padding: 5px 0; border-bottom: 1px solid #eee;">${t}</li>`).join('');
 }
 
-// --- CORE SAVING MECHANISM ---
+// --- CORE SAVING MECHANISM (Instant Save) ---
 function saveScore(plotId, trait, value) {
     if (!scores[plotId]) scores[plotId] = {};
     scores[plotId][trait] = value;
@@ -171,16 +163,13 @@ function renderPlotView() {
 
     let metaHtml = `<h3 style="margin-bottom:5px; color:#007bff;">Plot: ${plotId}</h3><div style="font-size:14px; color:#444;">`;
     
-    // Highlight Trial Name if mapped
     if (colMap.trial && currentPlot[colMap.trial]) {
         metaHtml += `<strong style="color:#6c757d;">Trial:</strong> ${currentPlot[colMap.trial]} <br>`;
     }
-    // Highlight Genotype if mapped
     if (colMap.geno && currentPlot[colMap.geno]) {
         metaHtml += `<strong style="color:#28a745;">Genotype:</strong> ${currentPlot[colMap.geno]} <br>`;
     }
     
-    // Print all other data (skipping the ones we already highlighted)
     for (const [key, val] of Object.entries(currentPlot)) {
         if (key !== colMap.plot && key !== colMap.geno && key !== colMap.trial && val !== '') {
             metaHtml += `<strong style="color:#222;">${key}:</strong> ${val} <br>`;
@@ -188,11 +177,10 @@ function renderPlotView() {
     }
     metaHtml += `</div>`;
     document.getElementById('plotMetaCard').innerHTML = metaHtml;
-// Build Trait Inputs
+
     let inputsHtml = '';
     traits.forEach(trait => {
         const existingVal = (scores[plotId] && scores[plotId][trait]) ? scores[plotId][trait] : '';
-        // Fix: Use oninput for instant saving, and safely escape the plotId
         const safePlotId = String(plotId).replace(/'/g, "\\'");
         inputsHtml += `
             <label>${trait}</label>
@@ -200,7 +188,8 @@ function renderPlotView() {
         `;
     });
     document.getElementById('plotInputs').innerHTML = inputsHtml || '<p style="color:#dc3545; font-weight:bold;">No traits defined. Please go back to Setup and add traits.</p>';
-    
+}
+
 function navigatePlot(direction) {
     currentPlotIndex += direction;
     if (currentPlotIndex < 0) currentPlotIndex = 0;
@@ -236,7 +225,6 @@ function renderTraitView() {
     let html = '';
     trialData.forEach(row => {
         const plotId = row[colMap.plot];
-        // Use the mapped genotype column, otherwise leave blank
         const genotype = colMap.geno ? row[colMap.geno] : ''; 
         const existingVal = (scores[plotId] && scores[plotId][activeTrait]) ? scores[plotId][activeTrait] : '';
         const safePlotId = String(plotId).replace(/'/g, "\\'");
@@ -291,7 +279,7 @@ function runQC() {
     if (!foundOutliers) resultsDiv.innerHTML = '<div class="qc-alert" style="background:#d4edda; color:#155724; border-color:#c3e6cb;">✅ All collected data looks normal. No statistical outliers found.</div>';
 }
 
-// --- EXPORT (BLOB UPGRADE) ---
+// --- EXPORT ---
 function exportData() {
     if (trialData.length === 0) return alert("No trial data to export.");
 
@@ -299,14 +287,11 @@ function exportData() {
     const plotIdCol = colMap.plot || baseHeaders[0];
     
     const allHeaders = [...baseHeaders, ...traits];
-    
-    // Build the raw text content (no URL data prefixes needed)
     let csvContent = allHeaders.join(',') + "\n";
 
     trialData.forEach(row => {
         let rowArray = baseHeaders.map(h => {
             let val = row[h] ? String(row[h]) : '';
-            // Escape commas and double quotes to prevent broken CSV columns
             if (val.includes(',') || val.includes('"')) {
                 val = `"${val.replace(/"/g, '""')}"`;
             }
@@ -322,33 +307,30 @@ function exportData() {
         csvContent += rowArray.join(',') + "\n";
     });
 
-   // 🛠️ THE FIX: Package as a Blob instead of a URL string
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     
     const link = document.createElement("a");
     link.setAttribute("href", url);
     
-    // Use the original filename, but add "_Scored" so it doesn't overwrite your blank template
-    let exportName = originalFileName.replace('.csv', '') + '_Scored.csv';
-    link.setAttribute("download", exportName);
+    // Generates the clean filename: e.g. "My_Agra_Trial_Scored.csv"
+    let cleanName = originalFileName.replace('.csv', '');
+    link.setAttribute("download", `${cleanName}_Scored.csv`);
     
     link.style.display = 'none';
     document.body.appendChild(link);
     
-    // Trigger download and clean up
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 }
-
 
 function clearDatabase() {
     if (confirm("WARNING: This will permanently delete all trial data and scores on this device. Did you export first?")) {
         localStorage.removeItem('b_trialData');
         localStorage.removeItem('b_scores');
         localStorage.removeItem('b_colMap');
-        // We leave traits saved so you don't have to retype them for the next field!
+        localStorage.removeItem('b_fileName');
         location.reload();
     }
 }
