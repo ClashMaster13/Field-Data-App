@@ -283,7 +283,7 @@ function runQC() {
     if (!foundOutliers) resultsDiv.innerHTML = '<div class="qc-alert" style="background:#d4edda; color:#155724; border-color:#c3e6cb;">✅ All collected data looks normal. No statistical outliers found.</div>';
 }
 
-// --- EXPORT ---
+// --- EXPORT (BLOB UPGRADE) ---
 function exportData() {
     if (trialData.length === 0) return alert("No trial data to export.");
 
@@ -291,13 +291,18 @@ function exportData() {
     const plotIdCol = colMap.plot || baseHeaders[0];
     
     const allHeaders = [...baseHeaders, ...traits];
-    let csvContent = "data:text/csv;charset=utf-8," + allHeaders.join(',') + "\n";
+    
+    // Build the raw text content (no URL data prefixes needed)
+    let csvContent = allHeaders.join(',') + "\n";
 
     trialData.forEach(row => {
         let rowArray = baseHeaders.map(h => {
             let val = row[h] ? String(row[h]) : '';
-            // Escape commas in strings to prevent broken CSV columns
-            return val.includes(',') ? `"${val}"` : val;
+            // Escape commas and double quotes to prevent broken CSV columns
+            if (val.includes(',') || val.includes('"')) {
+                val = `"${val.replace(/"/g, '""')}"`;
+            }
+            return val;
         });
         
         const plotId = row[plotIdCol];
@@ -309,13 +314,22 @@ function exportData() {
         csvContent += rowArray.join(',') + "\n";
     });
 
-    const encodedUri = encodeURI(csvContent);
+    // 🛠️ THE FIX: Package as a Blob instead of a URL string
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.setAttribute("href", url);
     link.setAttribute("download", "Exported_Field_Data.csv");
+    link.style.display = 'none';
     document.body.appendChild(link);
+    
+    // Trigger download and clean up
     link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
+
 
 function clearDatabase() {
     if (confirm("WARNING: This will permanently delete all trial data and scores on this device. Did you export first?")) {
