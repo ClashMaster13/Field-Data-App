@@ -503,27 +503,87 @@ function runQC() {
 function exportData() {
     if (trialData.length === 0) return alert("No trial data to export.");
 
+    // ------------------------------------------------------------------------
+    // STEP A: SCAN FOR MAXIMUM SUB-SAMPLES
+    // ------------------------------------------------------------------------
+    let maxObs = {};
+    traits.forEach(t => maxObs[t] = 1); // Assume at least 1 observation
+
+    // Read through the data to find the highest number of plants measured per trait
+    Object.keys(scores).forEach(plotId => {
+        traits.forEach(t => {
+            // Get the array of scores and remove empty blanks
+            let vals = getScoreArray(plotId, t).filter(v => v !== '');
+            if (vals.length > maxObs[t]) { maxObs[t] = vals.length; }
+        });
+    });
+
+    // ------------------------------------------------------------------------
+    // STEP B: BUILD THE DYNAMIC HEADERS
+    // ------------------------------------------------------------------------
     const baseHeaders = Object.keys(trialData[0]);
     const plotIdCol = colMap.plot || baseHeaders[0];
-    const allHeaders = [...baseHeaders, ...traits];
+    
+    let allHeaders = [...baseHeaders];
+    
+    // 1. Add Main Trait Headers (Will hold the calculated Mean)
+    traits.forEach(t => allHeaders.push(`${t} (Mean)`));
+    
+    // 2. Add the "Raw/Hidden" Columns at the far right
+    traits.forEach(t => {
+        if (maxObs[t] > 1) {
+            for (let k = 1; k <= maxObs[t]; k++) {
+                allHeaders.push(`${t}_Raw_${k}`);
+            }
+        }
+    });
+
     let csvContent = allHeaders.join(',') + "\n";
 
+    // ------------------------------------------------------------------------
+    // STEP C: PROCESS THE DATA
+    // ------------------------------------------------------------------------
     trialData.forEach(row => {
+        // 1. Push base CSV data (safely handling commas inside text)
         let rowArray = baseHeaders.map(h => {
             let val = row[h] ? String(row[h]) : '';
             return (val.includes(',') || val.includes('"')) ? `"${val.replace(/"/g, '""')}"` : val;
         });
+
         const plotId = row[plotIdCol];
-        
-        // Flatten the arrays with semicolons for CSV
+        let rawValuesPerTrait = {};
+
+        // 2. Calculate Means & Save Raw Data Temporarily
         traits.forEach(trait => {
-            let valArr = getScoreArray(plotId, trait).filter(v => v !== '');
-            rowArray.push(valArr.length > 0 ? valArr.join(' ; ') : '');
+            let vals = getScoreArray(plotId, trait).filter(v => v !== '');
+            rawValuesPerTrait[trait] = vals; // Save the raw numbers
+
+            if (vals.length > 0) {
+                // Add up all the numbers and divide by how many there are
+                let sum = vals.reduce((a, b) => a + parseFloat(b), 0);
+                rowArray.push(sum / vals.length); // Push the Mean
+            } else {
+                rowArray.push(""); // Leave blank if no data
+            }
         });
-        
+
+        // 3. Unload the Raw Data into the far-right columns
+        traits.forEach(trait => {
+            if (maxObs[t] > 1) {
+                let raws = rawValuesPerTrait[trait];
+                for (let k = 0; k < maxObs[trait]; k++) {
+                    rowArray.push(raws[k] || ""); // Push raw number or leave blank
+                }
+            }
+        });
+
+        // Add the finished row to the CSV text
         csvContent += rowArray.join(',') + "\n";
     });
 
+    // ------------------------------------------------------------------------
+    // STEP D: DOWNLOAD THE FILE
+    // ------------------------------------------------------------------------
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -535,7 +595,6 @@ function exportData() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 }
-
 // Push to Google Sheets
 async function syncToCloud() {
     const syncBtn = document.getElementById('syncBtn');
