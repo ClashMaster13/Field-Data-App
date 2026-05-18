@@ -1,83 +1,73 @@
 Author: Sudip Kundu
 
-# 🌾 Field Data App
+# 🌾 Offline Field Data App
 
-A high-performance, fully offline Progressive Web App (PWA) designed for plant breeders, agronomists, and field technicians. 
+I built this fully offline Progressive Web App (PWA) to solve a daily frustration in my breeding programs: collecting reliable field data without an internet connection. 
 
-This tool eliminates the need for paper field books and fragile Excel spreadsheets. It allows for dynamic trial mapping, multi-observation sub-sampling, offline photo capture, and instantaneous cloud synchronization to Google Sheets for seamless integration into R and Python data pipelines.
-
----
-
-## ✨ Core Features
-
-* **📡 100% Offline-First Architecture:** Built as a PWA using Service Workers and IndexedDB. Works flawlessly in the middle of a field with zero internet connection.
-* **📂 Dynamic Workspaces:** Switch between multiple crops or Multi-Location Trials (MLTs) on the fly (e.g., "Wheat_2026", "Mustard_F4"). Each workspace has its own isolated, high-capacity database.
-* **🗺️ Flexible Trial Mapping:** Upload your existing field maps (CSV). The app dynamically maps your specific columns for Plot Number, Trial Name, Genotype, Replication, and Location.
-* **🌱 Sub-Sample Engine:** Record multiple observations (plants) per plot for any trait. The app retains the raw data for intra-plot variance and broad-sense heritability calculations.
-* **🚨 Real-Time Quality Control:** Built-in outlier detection using N-1 Sample Standard Deviation. Set Z-Score stringency (Medium, Strict, Very Strict) to catch "fat-finger" typos while still standing in front of the plot.
-* **📸 Offline Media Capture:** Capture anomalies, disease symptoms, or morphological traits. Photos are stored securely in the local IndexedDB until a network connection is restored.
-* **☁️ Smart Cloud Sync:** Push data directly to Google Sheets via a serverless Google Apps Script backend. 
+I was tired of dealing with soggy paper field books, messy data transcription, and heavy software that freezes when it loses signal. I needed a lightweight, flexible tool that works flawlessly in remote locations, allows for quick sub-sampling of traits, and feeds my raw data directly into my R and Python analytics pipelines.
 
 ---
 
-## 🏗️ Architecture & Tech Stack
+## ✨ Why I Built This (Core Features)
 
-* **Frontend:** Vanilla HTML5, CSS3, JavaScript (ES6+).
-* **Local Storage:** `IndexedDB` (Handles 500MB+ of data and Base64 image strings natively).
-* **Offline Routing:** Service Workers (`sw.js`) with semantic versioning for seamless app updates without data loss.
-* **Backend (Serverless):** Google Apps Script (GAS) acting as a REST API.
-* **Data Storage:** Google Sheets (Relational Data) & Google Drive (Images).
+* **📡 100% Offline-First:** Powered by Service Workers and IndexedDB. I can stand in the middle of a trial field with zero bars of service, and the app won't miss a beat.
+* **📂 Dynamic Workspaces:** I can snap between different projects (like a Wheat MLT or a Mustard F4 trial) instantly. Each workspace gets its own isolated database.
+* **🗺️ Flexible Trial Mapping:** I didn't want to force a specific Excel template. You just upload your existing CSV trial map, and the app dynamically aligns your Plot, Genotype, and Replication columns.
+* **🌱 Sub-Sample Engine:** We rarely measure just one plant per plot. I built a dynamic sub-sampling tool so I can easily record 3, 5, or 10 observations for a single trait, keeping the raw data preserved for intra-plot variance and heritability calculations.
+* **🚨 Real-Time QC:** A built-in Z-Score scanner catches "fat-finger" typos while I'm still standing in front of the plot, saving me hours of data-cleaning later.
+* **📸 Offline Media Capture:** I can snap photos of morphological anomalies or disease symptoms right in the app. They safely sit in the tablet's browser memory until I get back to Wi-Fi.
+* **☁️ Cloud Sync:** One tap pushes all my data and decoded images directly to my Google Drive and Google Sheets.
 
 ---
 
 ## 🧬 The "Data Splitter" Analytics Pipeline
 
-To satisfy both field managers (who need clean averages) and data scientists (who need raw variance), the Google Apps Script backend acts as an intelligent data splitter. 
+When dealing with field data, there is always a conflict between wanting a clean spreadsheet for quick viewing and needing the raw, nested sub-samples for serious statistical modeling. 
 
-When data is synced:
-1. **Mean Calculation:** Calculates the true mean of plot sub-samples and places it in the primary trait column.
-2. **Variance Preservation:** Dynamically generates hidden "Raw" columns at the far right of the spreadsheet to store individual plant observations.
-3. **Image Routing:** Decodes Base64 image strings, saves them as JPEGs to Google Drive, and pastes a clickable URL directly into the plot's row.
+To solve this, I wrote a custom Google Apps Script backend that acts as an intelligent data splitter. When I hit sync:
+1. **Mean Calculation:** It calculates the true mean of my plot sub-samples and drops it into the primary trait column for easy reading.
+2. **Variance Preservation:** It dynamically generates hidden "Raw" columns at the far right of the sheet, preserving every individual plant measurement.
+3. **Image Routing:** It decodes the Base64 image strings, saves the actual JPEGs to a Google Drive folder, and drops a clickable link directly into the plot's row.
 
-This architecture ensures the resulting Google Sheet is instantly ready for General Combining Ability (GCA) matrices or ANOVA modeling in **R (tidyverse)** or **Python (pandas)**.
+The result is a Google Sheet that is instantly ready to be pulled directly into `tidyverse` or `pandas` for GCA matrices or ANOVA.
 
 ---
 
-## 🚀 Setup & Installation
+## 🏗️ Tech Stack
+
+* **Frontend:** Vanilla HTML5, CSS3, JavaScript (ES6+). No heavy frameworks.
+* **Local Storage:** `IndexedDB` to handle massive trial datasets and Base64 images natively.
+* **Backend:** Serverless Google Apps Script (GAS) acting as a REST API.
+* **Storage:** Google Sheets (Relational Data) & Google Drive (Images).
+
+---
+
+## 🚀 How to Set It Up
+
+If you want to use this for your own trials, here is how to deploy it:
 
 ### 1. Frontend Deployment (GitHub Pages)
-1. Fork or clone this repository.
-2. Ensure `index.html`, `app.js`, `sw.js`, and `manifest.json` are in the root directory.
-3. Go to **Settings > Pages**.
-4. Set the Source to **Deploy from a branch** and select `main`.
-5. Open the resulting URL on your mobile device/tablet and "Add to Home Screen" to install it as a native offline app.
+1. Fork or clone this repository so `index.html`, `app.js`, `sw.js`, and `manifest.json` are in your root directory.
+2. Go to **Settings > Pages** in your repo.
+3. Set the Source to **Deploy from a branch** and select `main`.
+4. Open the live URL on your tablet or phone and select "Add to Home Screen" to install it as an offline app.
 
 ### 2. Backend Setup (Google Apps Script)
-To enable the `☁️ Sync to Cloud` button, you must deploy the Google Apps Script router:
+To make the `☁️ Sync to Cloud` button work, you need to set up the router:
 
-1. Create a folder in Google Drive named `Field App Photos`. **Copy the Folder ID** from the URL.
-2. Create a new Google Sheet.
-3. In the Sheet, go to **Extensions > Apps Script**.
-4. Paste the provided backend code (see documentation or `gas_backend.js` if extracted).
-5. Replace `PASTE_YOUR_FOLDER_ID_HERE` with your Drive Folder ID.
+1. Create a folder in your Google Drive (e.g., `Field App Photos`) and **copy the Folder ID** from the URL.
+2. Create a blank Google Sheet.
+3. Click **Extensions > Apps Script**.
+4. Paste the backend code (provided in the deployment steps of this project).
+5. Replace `PASTE_YOUR_FOLDER_ID_HERE` with your actual Drive Folder ID.
 6. Click **Deploy > New deployment**.
     * Type: **Web app**
     * Execute as: **Me**
     * Who has access: **Anyone**
 7. **Copy the resulting Web App URL.**
-8. In this repository, open `app.js`, locate the `syncToCloud()` function, and replace the `GAS_URL` variable with your new Web App URL.
-9. Commit the change, bump the `CACHE_NAME` version in `sw.js`, and refresh your app!
+8. Back in this code repository, open `app.js`, locate the `syncToCloud()` function, and paste your URL into the `GAS_URL` variable.
+9. Commit the change, bump your `CACHE_NAME` version in `sw.js`, and refresh the app on your device!
 
----
-
-## 🛠️ Usage Workflow
-
-1. **Setup Workspace:** Open the app and create a new workspace (e.g., "Wheat MLT").
-2. **Upload Trial Map:** Select your pre-generated CSV trial map. Map the Plot and Genotype columns.
-3. **Define Traits:** Add the traits you will be scoring (e.g., Plant Height, Spike Length).
-4. **Collect Data:** Move to the **By Plot** or **By Trait** tab. Enter data. Use the "+ Add observation" button for sub-sampling. Take photos as needed.
-5. **Run QC:** Before leaving the field, navigate to the QC tab and run a scan to catch typos.
-6. **Sync:** Once connected to Wi-Fi, click **Sync to Cloud** to push all data and photos to your Google Sheet.
 
 Author: Sudip Kundu
 #### Copyright (c) 2026 [Sudip Kundu]. All rights reserved.
