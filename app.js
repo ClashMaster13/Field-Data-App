@@ -58,6 +58,18 @@ let currentPlotIndex = 0;
 let tempParsedData = []; 
 let tempHeaders = [];
 
+// Helper to prevent XSS by escaping HTML tags in user-uploaded data
+function escapeHTML(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/[&<>'"]/g, tag => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        "'": '&#39;',
+        '"': '&quot;'
+    }[tag]));
+}
+
 // ============================================================================
 // 4. HARD DRIVE READ / WRITE FUNCTIONS
 // ============================================================================
@@ -197,7 +209,7 @@ function handleFileUpload(event) {
             dropdowns.forEach(id => {
                 const sel = document.getElementById(id);
                 sel.innerHTML = id === 'mapPlot' ? '' : '<option value="">-- None / N/A --</option>'; 
-                sel.innerHTML += tempHeaders.map(h => `<option value="${h}">${h}</option>`).join('');
+                sel.innerHTML += tempHeaders.map(h => `<option value="${escapeHTML(h)}">${escapeHTML(h)}</option>`).join('');
             });
 
             autoSelect('mapPlot', ['plot', 'plot_no', 'entry']);
@@ -254,11 +266,11 @@ function updateSetupUI() {
     if (trialData.length > 0) {
         document.getElementById('uploadStatus').innerHTML = `
             <div style="background:#d4edda; color:#155724; padding:12px; border-radius:5px; margin-top:10px; border: 1px solid #c3e6cb;">
-                <strong>✅ Active in ${prettyWSName}:</strong> ${originalFileName} <br>
+                <strong>✅ Active in ${escapeHTML(prettyWSName)}:</strong> ${escapeHTML(originalFileName)} <br>
                 ${trialData.length} plots loaded. <b>Ready to score.</b>
             </div>`;
     } else {
-        document.getElementById('uploadStatus').innerHTML = `No trial loaded in ${prettyWSName}.`;
+        document.getElementById('uploadStatus').innerHTML = `No trial loaded in ${escapeHTML(prettyWSName)}.`;
     }
     document.getElementById('traitList').innerHTML = traits.map(t => `<li style="padding: 5px 0; border-bottom: 1px solid #eee;">${t}</li>`).join('');
 }
@@ -335,13 +347,13 @@ async function renderPlotView() {
     const safePlotId = String(plotId).replace(/'/g, "\\'"); 
 
     // Metadata Header
-    let metaHtml = `<h3 style="margin-bottom:5px; color:#007bff;">Plot: ${plotId}</h3><div style="font-size:14px; color:#444;">`;
-    if (colMap.trial && currentPlot[colMap.trial]) metaHtml += `<strong style="color:#6c757d;">Trial:</strong> ${currentPlot[colMap.trial]} <br>`;
-    if (colMap.geno && currentPlot[colMap.geno]) metaHtml += `<strong style="color:#28a745;">Genotype:</strong> ${currentPlot[colMap.geno]} <br>`;
+    let metaHtml = `<h3 style="margin-bottom:5px; color:#007bff;">Plot: ${escapeHTML(plotId)}</h3><div style="font-size:14px; color:#444;">`;
+    if (colMap.trial && currentPlot[colMap.trial]) metaHtml += `<strong style="color:#6c757d;">Trial:</strong> ${escapeHTML(currentPlot[colMap.trial])} <br>`;
+    if (colMap.geno && currentPlot[colMap.geno]) metaHtml += `<strong style="color:#28a745;">Genotype:</strong> ${escapeHTML(currentPlot[colMap.geno])} <br>`;
     
     for (const [key, val] of Object.entries(currentPlot)) {
         if (key !== colMap.plot && key !== colMap.geno && key !== colMap.trial && val !== '') {
-            metaHtml += `<strong style="color:#222;">${key}:</strong> ${val} <br>`;
+            metaHtml += `<strong style="color:#222;">${escapeHTML(key)}:</strong> ${escapeHTML(val)} <br>`;
         }
     }
     metaHtml += `</div>`;
@@ -441,7 +453,7 @@ function renderTraitView() {
         
         html += `
             <div class="trait-row" style="background: #fff; padding: 12px; margin-bottom: 8px; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <div style="font-weight:bold; width:40%; font-size:16px;">Plot ${plotId} <br><span style="font-size:13px; font-weight:normal; color:#666;">${genotype}</span></div>
+                <div style="font-weight:bold; width:40%; font-size:16px;">Plot ${escapeHTML(plotId)} <br><span style="font-size:13px; font-weight:normal; color:#666;">${escapeHTML(genotype)}</span></div>
                 <div style="width:60%; text-align:right;">${inputsStr}</div>
             </div>
         `;
