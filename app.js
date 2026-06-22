@@ -592,7 +592,7 @@ function exportData() {
 
         // 3. Unload the Raw Data into the far-right columns
         traits.forEach(trait => {
-            if (maxObs[t] > 1) {
+            if (maxObs[trait] > 1) {
                 let raws = rawValuesPerTrait[trait];
                 for (let k = 0; k < maxObs[trait]; k++) {
                     rowArray.push(raws[k] || ""); // Push raw number or leave blank
