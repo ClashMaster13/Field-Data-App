@@ -476,12 +476,27 @@ function navigatePlot(direction) {
 function jumpTo() {
     const term = document.getElementById('searchPlot').value.toLowerCase().trim();
     if (!term) return;
-    const index = trialData.findIndex(row => Object.values(row).some(val => String(val).toLowerCase().includes(term)));
+    
+    // 1. Prioritize exact match on Plot ID
+    let index = trialData.findIndex(row => colMap.plot && String(row[colMap.plot]).toLowerCase() === term);
+    
+    // 2. Prioritize exact match on Genotype
+    if (index === -1) {
+        index = trialData.findIndex(row => colMap.geno && String(row[colMap.geno]).toLowerCase() === term);
+    }
+    
+    // 3. Fallback to broad partial match on any column
+    if (index === -1) {
+        index = trialData.findIndex(row => Object.values(row).some(val => String(val).toLowerCase().includes(term)));
+    }
+
     if (index !== -1) {
         currentPlotIndex = index;
         renderPlotView();
         document.getElementById('searchPlot').value = '';
-    } else alert("Not found.");
+    } else {
+        alert("Not found.");
+    }
 }
 
 // ============================================================================

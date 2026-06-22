@@ -1,4 +1,4 @@
-const CACHE_NAME = 'field-scorer-v6';
+const CACHE_NAME = 'field-scorer-v7';
 const ASSETS = [
     './',
     './index.html',
