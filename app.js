@@ -337,17 +337,53 @@ async function savePhoto(event, plotId) {
     reader.onload = async function(e) {
         const base64Image = e.target.result;
         
-        document.getElementById('photoPreview').innerHTML = `<img src="${base64Image}" style="width: 100px; border-radius: 5px; border: 2px solid #28a745;">`;
-        
         const db = await initDB();
         const tx = db.transaction('photos', 'readwrite');
+        const uniqueId = `${activeWS}_${plotId}_${Date.now()}`;
         tx.objectStore('photos').put({
-            id: `${activeWS}_${plotId}`, 
+            id: uniqueId, 
             image_data: base64Image,
             timestamp: new Date().toISOString()
         });
+        
+        tx.oncomplete = () => renderPlotPhotos(plotId);
     };
     reader.readAsDataURL(file); 
+}
+
+async function deletePhoto(photoId, plotId) {
+    if (!confirm("Are you sure you want to delete this photo?")) return;
+    const db = await initDB();
+    const tx = db.transaction('photos', 'readwrite');
+    tx.objectStore('photos').delete(photoId);
+    tx.oncomplete = () => renderPlotPhotos(plotId);
+}
+
+async function renderPlotPhotos(plotId) {
+    const db = await initDB();
+    const tx = db.transaction('photos', 'readonly');
+    const store = tx.objectStore('photos');
+    
+    let photosHtml = '';
+    const safePlotId = String(plotId).replace(/'/g, "\\'");
+    
+    const cursorReq = store.openCursor();
+    cursorReq.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) {
+            // Check if this photo belongs to the current active workspace and plot
+            if (cursor.key === `${activeWS}_${plotId}` || cursor.key.startsWith(`${activeWS}_${plotId}_`)) {
+                photosHtml += `
+                    <div style="display:inline-block; position:relative; margin-right:10px; margin-bottom:10px;">
+                        <img src="${cursor.value.image_data}" style="height: 100px; border-radius: 5px; border: 2px solid #28a745; object-fit: cover;">
+                        <button onclick="deletePhoto('${cursor.key}', '${safePlotId}')" style="position:absolute; top:-10px; right:-10px; background:#dc3545; color:white; border:none; border-radius:50%; width:24px; height:24px; cursor:pointer; font-weight:bold; padding:0; line-height:24px; text-align:center;">&times;</button>
+                    </div>`;
+            }
+            cursor.continue();
+        } else {
+            document.getElementById('photoPreview').innerHTML = photosHtml;
+        }
+    };
 }
 
 // ============================================================================
@@ -408,14 +444,7 @@ async function renderPlotView() {
     document.getElementById('plotInputs').innerHTML = (inputsHtml || `<p style="color:#dc3545; font-weight:bold;">No traits defined.</p>`) + cameraHtml;
 
     // Fetch existing photo for this plot
-    const db = await initDB();
-    const tx = db.transaction('photos', 'readonly');
-    const photoReq = tx.objectStore('photos').get(`${activeWS}_${plotId}`);
-    photoReq.onsuccess = (e) => {
-        if (e.target.result) {
-            document.getElementById('photoPreview').innerHTML = `<img src="${e.target.result.image_data}" style="width: 100px; border-radius: 5px; border: 2px solid #28a745;">`;
-        }
-    };
+    renderPlotPhotos(plotId);
 }
 
 function navigatePlot(direction) {
